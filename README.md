@@ -3,7 +3,7 @@
 **Bayesian assurance vs. frequentist power for two-arm clinical trials with
 continuous, baseline-adjusted, binary or time-to-event outcomes.**
 
-> **Live app:** _coming soon_
+> **Live app:** <https://01a0e0e5-a13b-f83c-6ee7-a0c5d03109e8.share.connect.posit.cloud/>
 >
 > **Guide (English / Português):** <https://drhrf.github.io/AssuRance/>, an
 > illustrated, educational walkthrough of the ideas and the app, with an
