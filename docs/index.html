@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AssuRance: a guide to Bayesian assurance</title>
+<meta name="description" content="An educational guide to AssuRance, a free app that compares Bayesian assurance (probability of success) with frequentist power when planning clinical trials. In English and Portuguese.">
+<style>
+:root {
+  --bg: #f7f8fa; --surface: #ffffff; --surface-2: #eef2f7; --text: #1b2330; --muted: #5a6577;
+  --line: #d9dfe7; --accent: #1f5fa8; --accent-soft: #e3edf9; --power: #d1661a; --power-soft: #fbeadf;
+  --ok: #2a7d4f; --warn-bg: #fff6e0; --warn-line: #e8c56a; --danger-bg: #fdecec; --danger-line: #e0a3a3;
+  --code-bg: #eef1f5; --shadow: 0 1px 2px rgba(20,30,50,.06), 0 4px 16px rgba(20,30,50,.06);
+  --radius: 12px; --maxw: 1080px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151b; --surface: #181e26; --surface-2: #202834; --text: #e6ebf2; --muted: #9aa6b6;
+    --line: #2d3746; --accent: #6ea8ec; --accent-soft: #1b2a3d; --power: #f0955a; --power-soft: #3a2517;
+    --ok: #6cc596; --warn-bg: #2f2814; --warn-line: #7a6424; --danger-bg: #331c1c; --danger-line: #7b3b3b;
+    --code-bg: #222b37; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151b; --surface: #181e26; --surface-2: #202834; --text: #e6ebf2; --muted: #9aa6b6;
+  --line: #2d3746; --accent: #6ea8ec; --accent-soft: #1b2a3d; --power: #f0955a; --power-soft: #3a2517;
+  --ok: #6cc596; --warn-bg: #2f2814; --warn-line: #7a6424; --danger-bg: #331c1c; --danger-line: #7b3b3b;
+  --code-bg: #222b37; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 17px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+/* show only the selected language (inside body; the <html> element keeps its own lang) */
+:root[data-lang="en"] body [lang="pt"], :root[data-lang="pt"] body [lang="en"] { display: none !important; }
+a { color: var(--accent); }
+img { max-width: 100%; height: auto; display: block; }
+code, kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em;
+  background: var(--code-bg); padding: .1em .35em; border-radius: 5px; }
+h1, h2, h3, h4 { line-height: 1.25; margin: 0 0 .5em; }
+h2 { font-size: 1.75rem; margin-top: 0; }
+h3 { font-size: 1.2rem; margin-top: 1.6em; }
+p { margin: 0 0 1em; }
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
+
+/* top bar */
+header.top {
+  position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--line);
+}
+.top .wrap { display: flex; align-items: center; gap: 16px; height: 60px; }
+.brand { font-weight: 700; font-size: 1.15rem; color: var(--text); text-decoration: none; white-space: nowrap; }
+.brand span { color: var(--accent); }
+nav.links { display: flex; gap: 12px; overflow-x: auto; flex: 1; scrollbar-width: none; }
+nav.links a { color: var(--muted); text-decoration: none; font-size: .86rem; white-space: nowrap; }
+nav.links a:hover { color: var(--accent); }
+.btn {
+  display: inline-flex; align-items: center; gap: .4em; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); padding: .45em 1em; font: inherit; font-size: .92rem;
+  cursor: pointer; text-decoration: none; white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn[aria-disabled="true"] { opacity: .6; cursor: default; }
+#langBtn { font-weight: 600; }
+
+/* hero */
+.hero { padding: 56px 0 32px; }
+.hero h1 { font-size: clamp(2rem, 4.5vw, 3rem); letter-spacing: -.01em; }
+.hero .lead { font-size: 1.18rem; color: var(--muted); max-width: 760px; }
+.hero .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 28px; }
+.shot { border-radius: var(--radius); border: 1px solid var(--line); box-shadow: var(--shadow); background: var(--surface); }
+figure { margin: 18px 0 26px; }
+figcaption { color: var(--muted); font-size: .9rem; margin-top: 8px; }
+
+section { padding: 44px 0; border-top: 1px solid var(--line); }
+.eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; color: var(--accent); font-weight: 700; margin-bottom: 6px; }
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 760px) { .g2 { grid-template-columns: 1fr; } }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow); }
+.card h3, .card h4 { margin-top: 0; }
+.card.power { border-top: 4px solid var(--power); }
+.card.assur { border-top: 4px solid var(--accent); }
+.card.plain { border-top: 4px solid var(--muted); }
+.note { border-radius: var(--radius); padding: 14px 18px; margin: 16px 0; border: 1px solid var(--line); background: var(--surface-2); }
+.note.warn { background: var(--warn-bg); border-color: var(--warn-line); }
+.note.danger { background: var(--danger-bg); border-color: var(--danger-line); }
+.note.tip { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.note > strong { display: block; margin-bottom: 2px; }
+.formula { font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 1.12rem; text-align: center;
+  background: var(--surface); border: 1px dashed var(--line); border-radius: var(--radius); padding: 14px; margin: 14px 0; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); margin: 14px 0; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: var(--surface-2); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+ol.steps { counter-reset: s; list-style: none; padding: 0; }
+ol.steps > li { counter-increment: s; position: relative; padding-left: 48px; margin-bottom: 18px; }
+ol.steps > li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: .95rem; }
+.tag { display: inline-block; font-size: .78rem; padding: .1em .6em; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; margin-right: 4px; }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 18px; margin: 10px 0; }
+details summary { cursor: pointer; font-weight: 600; }
+details[open] summary { margin-bottom: 8px; }
+.tabs-tour { display: grid; gap: 30px; }
+.tour-item { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 24px; align-items: start; }
+@media (max-width: 1100px) { nav.links { display: none; } }
+@media (max-width: 820px) { .tour-item { grid-template-columns: 1fr; } }
+
+/* demo */
+.demo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 22px; }
+@media (max-width: 860px) { .demo { grid-template-columns: 1fr; } }
+.ctrl { margin-bottom: 14px; }
+.ctrl label { display: flex; justify-content: space-between; font-size: .93rem; font-weight: 600; }
+.ctrl output { font-variant-numeric: tabular-nums; color: var(--accent); }
+.ctrl small { display: block; color: var(--muted); font-size: .82rem; line-height: 1.4; margin-top: 2px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+select { font: inherit; padding: .3em .5em; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+.kpi { border-radius: 10px; padding: 10px 12px; background: var(--surface-2); }
+.kpi .v { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpi .l { font-size: .8rem; color: var(--muted); line-height: 1.3; }
+.kpi.a .v { color: var(--accent); } .kpi.p .v { color: var(--power); }
+#demoChart { width: 100%; height: auto; display: block; }
+#demoText { font-size: .95rem; }
+footer { padding: 40px 0 60px; color: var(--muted); font-size: .9rem; border-top: 1px solid var(--line); }
+.muted { color: var(--muted); }
+.small { font-size: .9rem; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top">Assu<span>R</span>ance</a>
+    <nav class="links" aria-label="Sections">
+      <a href="#idea"><span lang="en">The idea</span><span lang="pt">A ideia</span></a>
+      <a href="#demo"><span lang="en">Try it</span><span lang="pt">Experimente</span></a>
+      <a href="#concepts"><span lang="en">Key concepts</span><span lang="pt">Conceitos</span></a>
+      <a href="#tour"><span lang="en">App tour</span><span lang="pt">Tour do app</span></a>
+      <a href="#outcomes"><span lang="en">Outcome types</span><span lang="pt">Tipos de desfecho</span></a>
+      <a href="#examples"><span lang="en">Examples</span><span lang="pt">Exemplos</span></a>
+      <a href="#priors"><span lang="en">Choosing priors</span><span lang="pt">Escolhendo prioris</span></a>
+      <a href="#faq">FAQ</a>
+      <a href="#methods"><span lang="en">Methods</span><span lang="pt">Métodos</span></a>
+    </nav>
+    <button id="langBtn" class="btn" type="button" aria-label="Switch language / Mudar idioma">
+      <span lang="en">🇧🇷 Português</span><span lang="pt">🇬🇧 English</span>
+    </button>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============================================================ HERO -->
+<div class="hero">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="en">Free, open-source R Shiny app</span><span lang="pt">Aplicativo R Shiny livre e de código aberto</span></div>
+    <h1 lang="en">Will your trial succeed? A friendly guide to Bayesian assurance</h1>
+    <h1 lang="pt">Seu ensaio vai dar certo? Um guia amigável para a <em>assurance</em> bayesiana</h1>
+    <p class="lead" lang="en">AssuRance helps you choose a sample size for a two-arm randomised trial. It puts the classic <strong>power</strong> calculation next to <strong>Bayesian assurance</strong>, the probability that your trial will succeed once you admit you don't know the true effect exactly. This page explains the ideas and walks you through every part of the app.</p>
+    <p class="lead" lang="pt">O AssuRance ajuda a escolher o tamanho amostral de um ensaio randomizado com dois braços. Ele coloca o cálculo clássico de <strong>poder</strong> ao lado da <strong><em>assurance</em> bayesiana</strong>, a probabilidade de o seu ensaio ter sucesso quando você admite que não conhece exatamente o efeito verdadeiro. Esta página explica as ideias e percorre cada parte do aplicativo.</p>
+    <div class="actions">
+      <a id="appBtn" class="btn primary" href="#" target="_blank" rel="noopener">
+        <span lang="en">▶ Open the app</span><span lang="pt">▶ Abrir o aplicativo</span>
+      </a>
+      <a class="btn" href="https://github.com/drhrf/AssuRance" target="_blank" rel="noopener">GitHub</a>
+      <a class="btn" href="#demo"><span lang="en">Try the 1-minute demo</span><span lang="pt">Demonstração de 1 minuto</span></a>
+    </div>
+    <p id="appSoon" class="small muted" hidden>
+      <span lang="en">The public link is coming soon. Meanwhile, you can run the app on your own computer (see <a href="#run">Run it yourself</a>).</span>
+      <span lang="pt">O link público estará disponível em breve. Enquanto isso, você pode rodar o aplicativo no seu computador (veja <a href="#run">Rode você mesmo</a>).</span>
+    </p>
+    <figure>
+      <img class="shot" src="screenshot-results.png" alt="AssuRance results tab showing assurance and power curves" loading="eager">
+      <figcaption lang="en">The Results tab: Bayesian assurance (blue) and frequentist power (orange) across sample sizes. The app's interface is in English.</figcaption>
+      <figcaption lang="pt">A aba Results (resultados): <em>assurance</em> bayesiana (azul) e poder frequentista (laranja) ao longo dos tamanhos amostrais. A interface do aplicativo está em inglês.</figcaption>
+    </figure>
+  </div>
+</div>
+
+<!-- ============================================================ THE IDEA -->
+<section id="idea">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="en">The idea in one minute</span><span lang="pt">A ideia em um minuto</span></div>
+    <h2 lang="en">Power answers the wrong question (a little)</h2>
+    <h2 lang="pt">O poder responde à pergunta errada (um pouco)</h2>
+    <div class="grid g3">
+      <div class="card power">
+        <h3 lang="en">Frequentist power</h3><h3 lang="pt">Poder frequentista</h3>
+        <p lang="en">"<em>If</em> the treatment lowers blood pressure by exactly 5 mmHg, how often would my trial give a significant result?"</p>
+        <p lang="pt">"<em>Se</em> o tratamento reduzir a pressão arterial em exatamente 5 mmHg, com que frequência meu ensaio daria um resultado significativo?"</p>
+        <p class="small muted" lang="en">It bets everything on one guessed effect size.</p>
+        <p class="small muted" lang="pt">Aposta tudo em um único tamanho de efeito chutado.</p>
+      </div>
+      <div class="card assur">
+        <h3 lang="en">Bayesian assurance</h3><h3 lang="pt"><em>Assurance</em> bayesiana</h3>
+        <p lang="en">"Given everything I believe, <em>including my uncertainty</em> about the effect, how likely is my trial to succeed?"</p>
+        <p lang="pt">"Considerando tudo o que acredito, <em>incluindo minha incerteza</em> sobre o efeito, qual a chance de o meu ensaio ter sucesso?"</p>
+        <p class="small muted" lang="en">Also called the <em>probability of success</em> (PoS).</p>
+        <p class="small muted" lang="pt">Também chamada de <em>probabilidade de sucesso</em> (PoS, na sigla em inglês).</p>
+      </div>
+      <div class="card plain">
+        <h3 lang="en">Why it matters</h3><h3 lang="pt">Por que importa</h3>
+        <p lang="en">A trial "powered at 90%" can have a much lower real chance of success, because the true effect may be smaller than hoped, or zero. Assurance makes that risk visible <em>before</em> you recruit anyone.</p>
+        <p lang="pt">Um ensaio "com 90% de poder" pode ter uma chance real de sucesso bem menor, porque o efeito verdadeiro pode ser menor que o esperado, ou nulo. A <em>assurance</em> torna esse risco visível <em>antes</em> de recrutar qualquer participante.</p>
+      </div>
+    </div>
+    <div class="note tip">
+      <strong lang="en">An analogy</strong><strong lang="pt">Uma analogia</strong>
+      <span lang="en">Power is like asking "will I arrive on time <em>if traffic is exactly as usual</em>?" Assurance asks "will I arrive on time, <em>given how traffic might plausibly be today</em>?" Averaging over bad days lowers the answer, and makes it more honest.</span>
+      <span lang="pt">O poder é como perguntar "vou chegar na hora <em>se o trânsito estiver exatamente como sempre</em>?" A <em>assurance</em> pergunta "vou chegar na hora, <em>considerando como o trânsito pode plausivelmente estar hoje</em>?" Levar em conta os dias ruins reduz a resposta, e a torna mais honesta.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ DEMO -->
+<section id="demo">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="en">Interactive</span><span lang="pt">Interativo</span></div>
+    <h2 lang="en">Try it: watch power and assurance diverge</h2>
+    <h2 lang="pt">Experimente: veja o poder e a <em>assurance</em> se separarem</h2>
+    <p lang="en">A continuous outcome (for example blood pressure), two groups of equal size, and a two-sided test. Move the sliders, especially <strong>uncertainty</strong>, and watch what happens.</p>
+    <p lang="pt">Um desfecho contínuo (por exemplo, pressão arterial), dois grupos de mesmo tamanho e um teste bilateral. Mova os controles, principalmente a <strong>incerteza</strong>, e observe o que acontece.</p>
+    <div class="card demo">
+      <div>
+        <div class="ctrl">
+          <label for="dMean"><span><span lang="en">Expected effect</span><span lang="pt">Efeito esperado</span></span><output id="oMean"></output></label>
+          <input id="dMean" type="range" min="0" max="15" step="0.5" value="5">
+          <small lang="en">Your best guess of the true difference (treatment minus control).</small>
+          <small lang="pt">Seu melhor palpite para a diferença verdadeira (tratamento menos controle).</small>
+        </div>
+        <div class="ctrl">
+          <label for="dSd"><span><span lang="en">Uncertainty about the effect (SD)</span><span lang="pt">Incerteza sobre o efeito (DP)</span></span><output id="oSd"></output></label>
+          <input id="dSd" type="range" min="0" max="10" step="0.5" value="3">
+          <small lang="en">0 = you are certain (then assurance equals power).</small>
+          <small lang="pt">0 = você tem certeza (aí a <em>assurance</em> é igual ao poder).</small>
+        </div>
+        <div class="ctrl">
+          <label for="dSigma"><span><span lang="en">Outcome SD (variability between people)</span><span lang="pt">DP do desfecho (variabilidade entre pessoas)</span></span><output id="oSigma"></output></label>
+          <input id="dSigma" type="range" min="2" max="30" step="1" value="10">
+        </div>
+        <div class="ctrl">
+          <label for="dN"><span><span lang="en">Participants per group</span><span lang="pt">Participantes por grupo</span></span><output id="oN"></output></label>
+          <input id="dN" type="range" min="10" max="500" step="5" value="200">
+        </div>
+        <div class="ctrl">
+          <label for="dAlpha"><span>α <span lang="en">(two-sided)</span><span lang="pt">(bilateral)</span></span></label>
+          <select id="dAlpha"><option value="0.1">0.10</option><option value="0.05" selected>0.05</option><option value="0.01">0.01</option></select>
+        </div>
+      </div>
+      <div>
+        <div class="kpis">
+          <div class="kpi p"><div class="v" id="kPow">-</div><div class="l"><span lang="en">Frequentist power</span><span lang="pt">Poder frequentista</span></div></div>
+          <div class="kpi a"><div class="v" id="kAss">-</div><div class="l"><span lang="en">Bayesian assurance</span><span lang="pt"><em>Assurance</em> bayesiana</span></div></div>
+          <div class="kpi"><div class="v" id="kGap">-</div><div class="l"><span lang="en">Gap (points)</span><span lang="pt">Diferença (pontos)</span></div></div>
+        </div>
+        <svg id="demoChart" viewBox="0 0 600 320" role="img" aria-label="Power and assurance by sample size"></svg>
+        <p id="demoText" class="muted"></p>
+        <p class="small muted" lang="en">The demo uses exact formulas with a <em>vague</em> analysis prior and a z-test. The app adds analysis priors, one-sided tests, thresholds, unequal groups, simulation, and binary, ANCOVA and survival outcomes.</p>
+        <p class="small muted" lang="pt">A demonstração usa fórmulas exatas com uma priori de análise <em>vaga</em> e um teste z. O aplicativo acrescenta prioris de análise, testes unilaterais, limiares, grupos desiguais, simulação e desfechos binários, ANCOVA e de sobrevida.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ CONCEPTS -->
+<section id="concepts">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="en">Key concepts</span><span lang="pt">Conceitos-chave</span></div>
+    <h2 lang="en">Six ideas that make everything else easy</h2>
+    <h2 lang="pt">Seis ideias que tornam todo o resto fácil</h2>
+
+    <h3 lang="en">1. Assurance is power, averaged over your uncertainty</h3>
+    <h3 lang="pt">1. <em>Assurance</em> é o poder, em média, sobre a sua incerteza</h3>
+    <p lang="en">For every possible true effect θ, there is a probability that the trial succeeds, <em>P</em>(success | θ). Power reads this curve at one point. Assurance takes a weighted average of the whole curve, with weights given by how plausible you think each effect is (your <em>design prior</em>, π<sub>d</sub>):</p>
+    <p lang="pt">Para cada efeito verdadeiro possível θ, existe uma probabilidade de o ensaio ter sucesso, <em>P</em>(sucesso | θ). O poder lê essa curva em um único ponto. A <em>assurance</em> faz uma média ponderada da curva inteira, com pesos dados pelo quanto você acha cada efeito plausível (sua <em>priori de planejamento</em>, π<sub>d</sub>):</p>
+    <div class="formula">Assurance(n) = ∫ P(success | θ, n) · π<sub>d</sub>(θ) dθ</div>
+    <p lang="en">That is why assurance is usually <em>lower</em> than power when you are optimistic: plausible-but-small effects (and the chance of no effect at all) pull the average down. The app shows this directly on the <a href="#tour-cond">Success vs true effect</a> tab.</p>
+    <p lang="pt">Por isso a <em>assurance</em> costuma ser <em>menor</em> que o poder quando você é otimista: efeitos plausíveis porém pequenos (e a chance de não haver efeito algum) puxam a média para baixo. O aplicativo mostra isso diretamente na aba <a href="#tour-cond">Success vs true effect</a>.</p>
+
+    <h3 lang="en">2. Two priors, two jobs</h3>
+    <h3 lang="pt">2. Duas prioris, duas funções</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th></th>
+        <th><span lang="en">Design prior</span><span lang="pt">Priori de planejamento (<em>design prior</em>)</span></th>
+        <th><span lang="en">Analysis prior</span><span lang="pt">Priori de análise (<em>analysis prior</em>)</span></th></tr></thead>
+      <tbody>
+        <tr><td><strong lang="en">What it is</strong><strong lang="pt">O que é</strong></td>
+          <td><span lang="en">Your honest belief about the true effect, today.</span><span lang="pt">Sua crença honesta sobre o efeito verdadeiro, hoje.</span></td>
+          <td><span lang="en">The prior that the final analysis of the trial will use.</span><span lang="pt">A priori que a análise final do ensaio vai usar.</span></td></tr>
+        <tr><td><strong lang="en">Used for</strong><strong lang="pt">Usada para</strong></td>
+          <td><span lang="en">Simulating plausible "true worlds".</span><span lang="pt">Simular "mundos verdadeiros" plausíveis.</span></td>
+          <td><span lang="en">Turning each simulated dataset into a posterior and a decision.</span><span lang="pt">Transformar cada conjunto de dados simulado em uma posteriori e em uma decisão.</span></td></tr>
+        <tr><td><strong lang="en">Typical choice</strong><strong lang="pt">Escolha típica</strong></td>
+          <td><span lang="en">Realistic: based on evidence, with honest width.</span><span lang="pt">Realista: baseada em evidências, com largura honesta.</span></td>
+          <td><span lang="en">Sceptical (centred on no effect) or vague (very wide), so regulators and reviewers trust the result.</span><span lang="pt">Cética (centrada em efeito nulo) ou vaga (muito larga), para que agências reguladoras e revisores confiem no resultado.</span></td></tr>
+      </tbody></table></div>
+    <p lang="en">Separating the two is the key idea of the "two-prior" approach (Wang &amp; Gelfand, 2002) used by the <code>bayesassurance</code> package.</p>
+    <p lang="pt">Separar as duas é a ideia central da abordagem de "duas prioris" (Wang &amp; Gelfand, 2002), usada pelo pacote <code>bayesassurance</code>.</p>
+
+    <h3 lang="en">3. What counts as "success"</h3>
+    <h3 lang="pt">3. O que conta como "sucesso"</h3>
+    <p lang="en">After the trial, the analysis prior and the data give a posterior distribution for the effect. The trial is a success when that posterior is convincing enough:</p>
+    <p lang="pt">Depois do ensaio, a priori de análise e os dados produzem uma distribuição posteriori para o efeito. O ensaio é um sucesso quando essa posteriori é suficientemente convincente:</p>
+    <ul>
+      <li lang="en"><strong>One-sided:</strong> <em>P</em>(effect beyond the threshold | data) &gt; 1 − α, for example above 97.5% with α = 0.025.</li>
+      <li lang="pt"><strong>Unilateral:</strong> <em>P</em>(efeito além do limiar | dados) &gt; 1 − α, por exemplo acima de 97,5% com α = 0,025.</li>
+      <li lang="en"><strong>Two-sided:</strong> either direction is convincing at 1 − α/2. Note: this also counts a clear effect in the <em>unexpected</em> direction as "success". The app tells you how much of the assurance comes from that.</li>
+      <li lang="pt"><strong>Bilateral:</strong> qualquer das duas direções é convincente a 1 − α/2. Atenção: isso também conta como "sucesso" um efeito claro na direção <em>inesperada</em>. O aplicativo informa quanto da <em>assurance</em> vem disso.</li>
+    </ul>
+    <p lang="en">The <strong>success threshold</strong> lets you express three kinds of design:</p>
+    <p lang="pt">O <strong>limiar de sucesso</strong> permite expressar três tipos de desenho:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th><span lang="en">Design</span><span lang="pt">Desenho</span></th><th><span lang="en">Threshold</span><span lang="pt">Limiar</span></th><th><span lang="en">Example (hazard ratio, "treatment &lt; control")</span><span lang="pt">Exemplo (razão de riscos, "tratamento &lt; controle")</span></th></tr></thead>
+      <tbody>
+        <tr><td><span lang="en">Superiority</span><span lang="pt">Superioridade</span></td><td><span lang="en">the no-effect value (0, or 1 for ratios)</span><span lang="pt">o valor de efeito nulo (0, ou 1 para razões)</span></td><td><span lang="en">show HR &lt; 1</span><span lang="pt">mostrar HR &lt; 1</span></td></tr>
+        <tr><td><span lang="en">Superiority by a meaningful margin</span><span lang="pt">Superioridade por uma margem relevante</span></td><td><span lang="en">beyond no-effect, in the beneficial direction</span><span lang="pt">além do efeito nulo, na direção benéfica</span></td><td><span lang="en">show HR &lt; 0.8</span><span lang="pt">mostrar HR &lt; 0,8</span></td></tr>
+        <tr><td><span lang="en">Non-inferiority</span><span lang="pt">Não inferioridade</span></td><td><span lang="en">on the harmful side (the NI margin)</span><span lang="pt">do lado prejudicial (a margem de NI)</span></td><td><span lang="en">show HR &lt; 1.3</span><span lang="pt">mostrar HR &lt; 1,3</span></td></tr>
+      </tbody></table></div>
+
+    <h3 lang="en">4. The assurance ceiling</h3>
+    <h3 lang="pt">4. O teto da <em>assurance</em></h3>
+    <p lang="en">With an enormous trial, the data overwhelm the analysis prior and you succeed exactly when the true effect is beyond the threshold. So assurance can never exceed the design-prior probability of that event. If your prior gives a 15% chance that the treatment does not work, no sample size can push assurance above 85%. <strong>More participants cannot rescue a treatment that might not work.</strong> The app shows this ceiling and tells you when your target is above it.</p>
+    <p lang="pt">Com um ensaio gigantesco, os dados superam a priori de análise, e você tem sucesso exatamente quando o efeito verdadeiro está além do limiar. Por isso, a <em>assurance</em> nunca pode passar da probabilidade, segundo a priori de planejamento, desse evento. Se a sua priori dá 15% de chance de o tratamento não funcionar, nenhum tamanho amostral leva a <em>assurance</em> acima de 85%. <strong>Mais participantes não salvam um tratamento que pode não funcionar.</strong> O aplicativo mostra esse teto e avisa quando a sua meta está acima dele.</p>
+
+    <h3 lang="en">5. Simulation vs exact calculation</h3>
+    <h3 lang="pt">5. Simulação vs cálculo exato</h3>
+    <p lang="en"><strong>Simulation</strong> creates thousands of virtual trials. Each one draws a true effect from the design prior, generates data, analyses them with the analysis prior, and records success or failure. Its answer has a small random error, shown as a shaded 95% band. <strong>Exact</strong> uses formulas (or numerical integration): it is instant and noise-free. The two agree closely, and the app can overlay one on the other as a check.</p>
+    <p lang="pt">A <strong>simulação</strong> cria milhares de ensaios virtuais. Cada um sorteia um efeito verdadeiro da priori de planejamento, gera dados, analisa-os com a priori de análise e registra sucesso ou fracasso. O resultado tem um pequeno erro aleatório, mostrado como uma faixa sombreada de 95%. O cálculo <strong>exato</strong> usa fórmulas (ou integração numérica): é instantâneo e sem ruído. Os dois concordam de perto, e o aplicativo pode sobrepor um ao outro como verificação.</p>
+
+    <h3 lang="en">6. Why the gap between assurance and power matters</h3>
+    <h3 lang="pt">6. Por que a diferença entre <em>assurance</em> e poder importa</h3>
+    <p lang="en">When power is 95% but assurance is 70%, your trial's success depends heavily on your guess being right. The app flags gaps larger than 15 percentage points. It's a prompt to ask: is my expected effect realistic? Can I reduce uncertainty, for example with a pilot study or better evidence? Is the trial still worth running?</p>
+    <p lang="pt">Quando o poder é 95% mas a <em>assurance</em> é 70%, o sucesso do seu ensaio depende muito de o seu palpite estar certo. O aplicativo sinaliza diferenças maiores que 15 pontos percentuais. É um convite a perguntar: meu efeito esperado é realista? Posso reduzir a incerteza, por exemplo com um estudo piloto ou evidências melhores? O ensaio ainda vale a pena?</p>
+  </div>
+</section>
+
+<!-- ============================================================ TOUR -->
+<section id="tour">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="en">Step by step</span><span lang="pt">Passo a passo</span></div>
+    <h2 lang="en">A tour of the app</h2>
+    <h2 lang="pt">Um tour pelo aplicativo</h2>
+
+    <h3 lang="en">The sidebar: describe your trial</h3>
+    <h3 lang="pt">A barra lateral: descreva seu ensaio</h3>
+    <div class="tour-item">
+      <ol class="steps">
+        <li lang="en"><strong>Outcome.</strong> Choose the type of primary outcome: continuous, continuous adjusted for baseline (ANCOVA), binary, or time to event. The inputs below adapt to your choice. See <a href="#outcomes">outcome types</a>.</li>
+        <li lang="pt"><strong>Outcome (desfecho).</strong> Escolha o tipo de desfecho primário: contínuo, contínuo ajustado pelo valor basal (ANCOVA), binário ou tempo até o evento. Os campos abaixo se adaptam à sua escolha. Veja <a href="#outcomes">tipos de desfecho</a>.</li>
+        <li lang="en"><strong>Effect and priors.</strong> Your design prior: a mean and SD, or a 95% plausible range for ratios. Then decide whether to <em>analyse with the same prior</em> (simple, but optimistic) or set a separate analysis prior. A grey box translates your numbers into plain words, for example "a 98% chance the hazard ratio is below 1".</li>
+        <li lang="pt"><strong>Effect and priors (efeito e prioris).</strong> Sua priori de planejamento: média e DP, ou um intervalo plausível de 95% para razões. Depois decida se vai <em>analisar com a mesma priori</em> (simples, mas otimista) ou definir uma priori de análise separada. Uma caixa cinza traduz seus números em palavras, por exemplo "98% de chance de a razão de riscos ser menor que 1".</li>
+        <li lang="en"><strong>Trial design.</strong> The range of sample sizes to evaluate (per group), the allocation ratio (e.g. 2:1), and expected dropout (used to compute how many to enrol).</li>
+        <li lang="pt"><strong>Trial design (desenho).</strong> A faixa de tamanhos amostrais a avaliar (por grupo), a razão de alocação (ex.: 2:1) e o abandono esperado (usado para calcular quantos recrutar).</li>
+        <li lang="en"><strong>What counts as success.</strong> Two-sided or one-sided, the success threshold, α, and your target probability (commonly 80% or 90%).</li>
+        <li lang="pt"><strong>What counts as success (o que é sucesso).</strong> Bilateral ou unilateral, o limiar de sucesso, α e sua probabilidade-alvo (geralmente 80% ou 90%).</li>
+        <li lang="en"><strong>Computation.</strong> Simulation (default) or exact; number of simulated trials; random seed. The sidebar estimates the run time.</li>
+        <li lang="pt"><strong>Computation (cálculo).</strong> Simulação (padrão) ou exato; número de ensaios simulados; semente aleatória. A barra lateral estima o tempo de execução.</li>
+        <li lang="en"><strong>Calculate.</strong> A progress box appears with a <strong>Stop run</strong> button, and you can keep using the other tabs meanwhile. If you change inputs afterwards, a yellow note reminds you to recalculate. The <strong>bookmark</strong> button gives you a link that restores all your inputs.</li>
+        <li lang="pt"><strong>Calculate (calcular).</strong> Aparece uma caixa de progresso com o botão <strong>Stop run</strong> (parar), e você pode continuar usando as outras abas enquanto isso. Se você mudar algo depois, uma nota amarela lembra de recalcular. O botão de <strong>marcador</strong> gera um link que restaura todas as suas entradas.</li>
+      </ol>
+      <figure>
+        <img class="shot" src="img/sidebar-survival.png" alt="Sidebar with time-to-event inputs" loading="lazy">
+        <figcaption lang="en">The sidebar for a time-to-event outcome. Every input has an ⓘ tooltip.</figcaption>
+        <figcaption lang="pt">A barra lateral para um desfecho de tempo até o evento. Cada campo tem uma dica ⓘ.</figcaption>
+      </figure>
+    </div>
+
+    <h3 lang="en">The tabs: read your results</h3>
+    <h3 lang="pt">As abas: leia seus resultados</h3>
+    <div class="tabs-tour">
+      <div class="tour-item" id="tour-results">
+        <div>
+          <h4><span class="tag">Results</span> <span lang="en">Your answer</span><span lang="pt">Sua resposta</span></h4>
+          <ul>
+            <li lang="en"><strong>Four boxes:</strong> assurance and power at your largest sample size; the <strong>n needed</strong> for your target (with expected events for binary and survival outcomes); and the <strong>assurance ceiling</strong>.</li>
+            <li lang="pt"><strong>Quatro caixas:</strong> <em>assurance</em> e poder no maior tamanho amostral; o <strong>n necessário</strong> para a sua meta (com eventos esperados para desfechos binários e de sobrevida); e o <strong>teto da <em>assurance</em></strong>.</li>
+            <li lang="en"><strong>The curve:</strong> assurance (blue, with its simulation band) and power (orange, dashed), with your target and the ceiling as reference lines.</li>
+            <li lang="pt"><strong>A curva:</strong> <em>assurance</em> (azul, com sua faixa de simulação) e poder (laranja, tracejado), com a meta e o teto como linhas de referência.</li>
+            <li lang="en"><strong>A plain-language summary</strong> you can adapt for a protocol or grant application, a results table, and downloads (CSV, PNG, text report).</li>
+            <li lang="pt"><strong>Um resumo em linguagem simples</strong> que você pode adaptar para um protocolo ou projeto de financiamento, uma tabela de resultados e downloads (CSV, PNG, relatório em texto).</li>
+            <li lang="en"><strong>Warnings</strong> appear here, for example when your analysis prior alone would already declare success.</li>
+            <li lang="pt"><strong>Alertas</strong> aparecem aqui, por exemplo quando a sua priori de análise sozinha já declararia sucesso.</li>
+          </ul>
+        </div>
+        <figure><img class="shot" src="img/results-summary.png" alt="Summary and results table" loading="lazy"></figure>
+      </div>
+
+      <div class="tour-item" id="tour-priors">
+        <div>
+          <h4><span class="tag">Priors</span> <span lang="en">See what you believe</span><span lang="pt">Veja no que você acredita</span></h4>
+          <p lang="en">Your design prior (blue) and analysis prior (green, dashed), with the effects that count as success shaded. Ratios are shown on a log scale. Below, the plot is translated into words, for example the chance that treatment helps, or the implied event rates.</p>
+          <p lang="pt">Sua priori de planejamento (azul) e de análise (verde, tracejada), com os efeitos que contam como sucesso sombreados. Razões aparecem em escala logarítmica. Abaixo, o gráfico é traduzido em palavras, por exemplo a chance de o tratamento ajudar ou as taxas de eventos implícitas.</p>
+          <p class="small muted" lang="en">Check: does this picture match what you and your clinical team really believe?</p>
+          <p class="small muted" lang="pt">Verifique: essa figura corresponde ao que você e sua equipe clínica realmente acreditam?</p>
+        </div>
+        <figure><img class="shot" src="img/tab-priors.png" alt="Priors tab" loading="lazy"></figure>
+      </div>
+
+      <div class="tour-item" id="tour-cond">
+        <div>
+          <h4><span class="tag">Success vs true effect</span> <span lang="en">The heart of the idea</span><span lang="pt">O coração da ideia</span></h4>
+          <p lang="en">For a sample size you choose, the chance of success <em>if the true effect were exactly x</em>, for the Bayesian analysis (blue) and the frequentist test (orange). The grey hill is your design prior. <strong>Power</strong> reads the orange curve at a single point; <strong>assurance</strong> averages the blue curve over the grey hill.</p>
+          <p lang="pt">Para um tamanho amostral escolhido, a chance de sucesso <em>se o efeito verdadeiro fosse exatamente x</em>, para a análise bayesiana (azul) e para o teste frequentista (laranja). A "montanha" cinza é a sua priori de planejamento. O <strong>poder</strong> lê a curva laranja em um único ponto; a <strong><em>assurance</em></strong> faz a média da curva azul sobre a montanha cinza.</p>
+        </div>
+        <figure><img class="shot" src="img/tab-conditional.png" alt="Success versus true effect tab" loading="lazy"></figure>
+      </div>
+
+      <div class="tour-item" id="tour-sens">
+        <div>
+          <h4><span class="tag">Sensitivity</span> <span lang="en">How fragile is the answer?</span><span lang="pt">Quão frágil é a resposta?</span></h4>
+          <ul>
+            <li lang="en"><strong>Heat map:</strong> assurance for other design priors (centre × uncertainty). Your inputs are marked with an ×.</li>
+            <li lang="pt"><strong>Mapa de calor:</strong> <em>assurance</em> para outras prioris de planejamento (centro × incerteza). Suas entradas estão marcadas com um ×.</li>
+            <li lang="en"><strong>Analysis prior:</strong> how assurance changes from very informative to vague analysis priors, and compared with a sceptical one.</li>
+            <li lang="pt"><strong>Priori de análise:</strong> como a <em>assurance</em> muda de prioris muito informativas até vagas, e em comparação com uma cética.</li>
+            <li lang="en"><strong>Nuisance assumption:</strong> assurance and power if the outcome SD, baseline correlation, control event rate or control median survival is off.</li>
+            <li lang="pt"><strong>Suposição de incômodo:</strong> <em>assurance</em> e poder caso o DP do desfecho, a correlação basal, a taxa de eventos no controle ou a mediana de sobrevida no controle estejam errados.</li>
+          </ul>
+        </div>
+        <figure><img class="shot" src="img/tab-sensitivity.png" alt="Sensitivity tab" loading="lazy"></figure>
+      </div>
+
+      <div class="tour-item" id="tour-compare">
+        <div>
+          <h4><span class="tag">Compare scenarios</span> <span lang="en">Side by side</span><span lang="pt">Lado a lado</span></h4>
+          <p lang="en">Save up to eight runs from the Results tab (optimistic vs pessimistic, same vs sceptical prior, different outcome types...) and compare their curves and key numbers here.</p>
+          <p lang="pt">Salve até oito execuções na aba Results (otimista vs pessimista, mesma priori vs cética, tipos de desfecho diferentes...) e compare aqui suas curvas e números principais.</p>
+        </div>
+        <figure><img class="shot" src="img/tab-compare.png" alt="Compare scenarios tab" loading="lazy"></figure>
+      </div>
+
+      <div class="tour-item" id="tour-llm">
+        <div>
+          <h4><span class="tag">LLM prompt helper</span> <span lang="en">Research your inputs with AI</span><span lang="pt">Pesquise suas entradas com IA</span></h4>
+          <p lang="en">Describe your project (condition, intervention, outcome, what you already know). The app writes a detailed prompt for an AI assistant: it asks for evidence-based values for every input, with sources, conversions, alternative scenarios and caveats, ending in a JSON block. Paste the answer back and the app fills in the inputs. You can ask for the answer in Portuguese.</p>
+          <p lang="pt">Descreva seu projeto (condição, intervenção, desfecho, o que você já sabe). O aplicativo escreve um prompt detalhado para um assistente de IA: ele pede valores baseados em evidências para cada entrada, com fontes, conversões, cenários alternativos e ressalvas, terminando em um bloco JSON. Cole a resposta de volta e o aplicativo preenche as entradas. Você pode pedir a resposta em português.</p>
+          <div class="note warn small"><span lang="en">AI assistants can be wrong or invent references. Always check the key numbers and sources, and don't paste confidential information into tools your institution hasn't approved.</span><span lang="pt">Assistentes de IA podem errar ou inventar referências. Sempre confira os números e as fontes principais, e não cole informações confidenciais em ferramentas não aprovadas pela sua instituição.</span></div>
+        </div>
+        <figure><img class="shot" src="img/tab-prompt.png" alt="LLM prompt helper tab" loading="lazy"></figure>
+      </div>
+
+      <div class="tour-item">
+        <div>
+          <h4><span class="tag">Methods &amp; help</span> <span lang="en">Under the hood</span><span lang="pt">Por dentro</span></h4>
+          <p lang="en">Formulas, assumptions, how each engine works, limitations and references, all inside the app. For long simulations, the floating box lets you stop at any time; your previous results are kept.</p>
+          <p lang="pt">Fórmulas, suposições, como cada motor de cálculo funciona, limitações e referências, tudo dentro do aplicativo. Em simulações longas, a caixa flutuante permite parar a qualquer momento; os resultados anteriores são mantidos.</p>
+        </div>
+        <figure><img class="shot" src="img/running.png" alt="Simulation running with Stop button" loading="lazy"></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ OUTCOMES -->
+<section id="outcomes">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="en">Outcome types</span><span lang="pt">Tipos de desfecho</span></div>
+    <h2 lang="en">Four kinds of primary outcome</h2>
+    <h2 lang="pt">Quatro tipos de desfecho primário</h2>
+    <div class="grid g2">
+      <div class="card">
+        <h3 lang="en">Continuous: difference in means</h3><h3 lang="pt">Contínuo: diferença de médias</h3>
+        <p lang="en"><em>Examples:</em> blood pressure, HbA1c, a pain score. The effect is treatment mean minus control mean, in the outcome's units.</p>
+        <p lang="pt"><em>Exemplos:</em> pressão arterial, HbA1c, escore de dor. O efeito é a média do tratamento menos a média do controle, nas unidades do desfecho.</p>
+        <p lang="en"><strong>You need:</strong> the outcome SD (from previous studies of the same outcome and population).</p>
+        <p lang="pt"><strong>Você precisa:</strong> do DP do desfecho (de estudos anteriores com o mesmo desfecho e população).</p>
+        <p class="small muted" lang="en">Engine: <code>bayesassurance::bayes_sim_unbalanced</code>. Power: two-sample t-test.</p>
+        <p class="small muted" lang="pt">Motor: <code>bayesassurance::bayes_sim_unbalanced</code>. Poder: teste t para duas amostras.</p>
+      </div>
+      <div class="card">
+        <h3 lang="en">Continuous, adjusted for baseline (ANCOVA)</h3><h3 lang="pt">Contínuo, ajustado pelo valor basal (ANCOVA)</h3>
+        <p lang="en">When the outcome is also measured at baseline, adjusting for it removes noise. The residual SD shrinks to σ·√(1 − ρ²): with ρ = 0.5 you need about 25% fewer participants.</p>
+        <p lang="pt">Quando o desfecho também é medido na linha de base, ajustar por ele remove ruído. O DP residual diminui para σ·√(1 − ρ²): com ρ = 0,5, você precisa de cerca de 25% menos participantes.</p>
+        <p lang="en"><strong>You need:</strong> the outcome SD and the baseline–follow-up correlation ρ (often 0.4–0.7).</p>
+        <p lang="pt"><strong>Você precisa:</strong> do DP do desfecho e da correlação ρ entre linha de base e seguimento (geralmente 0,4–0,7).</p>
+        <p class="small muted" lang="en">Engine: <code>bayes_sim_unbalanced</code> fitting a full regression with a simulated baseline covariate. Power: ANCOVA t-test.</p>
+        <p class="small muted" lang="pt">Motor: <code>bayes_sim_unbalanced</code> ajustando uma regressão completa com uma covariável basal simulada. Poder: teste t da ANCOVA.</p>
+      </div>
+      <div class="card">
+        <h3 lang="en">Binary (event yes/no)</h3><h3 lang="pt">Binário (evento sim/não)</h3>
+        <p lang="en"><em>Examples:</em> clinical response, death by one year, readmission. Choose the effect measure: <strong>odds ratio</strong>, <strong>risk ratio</strong>, or <strong>risk difference</strong> (in percentage points).</p>
+        <p lang="pt"><em>Exemplos:</em> resposta clínica, óbito em um ano, reinternação. Escolha a medida de efeito: <strong>razão de chances</strong> (<em>odds ratio</em>), <strong>risco relativo</strong> ou <strong>diferença de riscos</strong> (em pontos percentuais).</p>
+        <p lang="en"><strong>You need:</strong> the event rate in the control group, and a plausible range for the effect.</p>
+        <p lang="pt"><strong>Você precisa:</strong> da taxa de eventos no grupo controle e de um intervalo plausível para o efeito.</p>
+        <p class="small muted" lang="en">Engine: built-in simulation of binomial counts. Exact: numerical integration. Power: Wald z-test.</p>
+        <p class="small muted" lang="pt">Motor: simulação própria de contagens binomiais. Exato: integração numérica. Poder: teste z de Wald.</p>
+      </div>
+      <div class="card">
+        <h3 lang="en">Time to event (survival)</h3><h3 lang="pt">Tempo até o evento (sobrevida)</h3>
+        <p lang="en"><em>Examples:</em> time to death, relapse or hospitalisation. The effect is the <strong>hazard ratio</strong>. What drives precision is the <strong>number of events</strong>, so the app reports expected events next to every sample size.</p>
+        <p lang="pt"><em>Exemplos:</em> tempo até óbito, recidiva ou hospitalização. O efeito é a <strong>razão de riscos</strong> (<em>hazard ratio</em>). O que determina a precisão é o <strong>número de eventos</strong>, por isso o aplicativo informa os eventos esperados para cada tamanho amostral.</p>
+        <p lang="en"><strong>You need:</strong> the control-group median time to event, the recruitment period, extra follow-up, and expected loss to follow-up.</p>
+        <p lang="pt"><strong>Você precisa:</strong> da mediana do tempo até o evento no grupo controle, do período de recrutamento, do seguimento adicional e da perda de seguimento esperada.</p>
+        <p class="small muted" lang="en">Engine: built-in patient-level simulation (staggered entry, censoring, dropout). Power: Wald z-test on the log hazard ratio.</p>
+        <p class="small muted" lang="pt">Motor: simulação própria por paciente (entrada escalonada, censura, abandono). Poder: teste z de Wald no log da razão de riscos.</p>
+      </div>
+    </div>
+    <div class="note tip">
+      <strong lang="en">Entering priors for ratios</strong><strong lang="pt">Como informar prioris para razões</strong>
+      <span lang="en">For odds, risk and hazard ratios, just give the range you are 95% sure contains the true value, for example "the hazard ratio is between 0.6 and 1.0". The app turns it into a log-normal prior whose best guess is the geometric midpoint (√(0.6 × 1.0) ≈ 0.77).</span>
+      <span lang="pt">Para razões de chances, riscos relativos e razões de riscos, basta informar o intervalo que você tem 95% de certeza de conter o valor verdadeiro, por exemplo "a razão de riscos está entre 0,6 e 1,0". O aplicativo transforma isso em uma priori log-normal cujo melhor palpite é o ponto médio geométrico (√(0,6 × 1,0) ≈ 0,77).</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ EXAMPLES -->
+<section id="examples">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="en">Worked examples</span><span lang="pt">Exemplos resolvidos</span></div>
+    <h2 lang="en">Two trials, two lessons</h2>
+    <h2 lang="pt">Dois ensaios, duas lições</h2>
+
+    <h3 lang="en">Example A: a blood-pressure drug (continuous outcome)</h3>
+    <h3 lang="pt">Exemplo A: um anti-hipertensivo (desfecho contínuo)</h3>
+    <p lang="en">A team expects a 5 mmHg reduction in systolic blood pressure versus placebo, but admits it could plausibly be anywhere from about −1 to 11 mmHg (design prior: mean 5, SD 3). The outcome SD is 10 mmHg. These are the app's default values.</p>
+    <p lang="pt">Uma equipe espera uma redução de 5 mmHg na pressão sistólica em relação ao placebo, mas admite que ela pode plausivelmente estar entre cerca de −1 e 11 mmHg (priori de planejamento: média 5, DP 3). O DP do desfecho é 10 mmHg. Esses são os valores padrão do aplicativo.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th></th><th><span lang="en">Frequentist power</span><span lang="pt">Poder frequentista</span></th><th><span lang="en">Bayesian assurance</span><span lang="pt"><em>Assurance</em> bayesiana</span></th></tr></thead>
+      <tbody>
+        <tr><td><span lang="en">At 200 per group</span><span lang="pt">Com 200 por grupo</span></td><td>99.9%</td><td>88.0%</td></tr>
+        <tr><td><span lang="en">n per group for 80%</span><span lang="pt">n por grupo para 80%</span></td><td>64</td><td>77</td></tr>
+      </tbody></table></div>
+    <p lang="en"><strong>Lesson:</strong> power says 200 per group is massive overkill (99.9%). Assurance says there is still a 12% chance of failure, mostly because the drug might work much less well than hoped. That risk doesn't go away with more patients.</p>
+    <p lang="pt"><strong>Lição:</strong> o poder diz que 200 por grupo é um exagero (99,9%). A <em>assurance</em> diz que ainda há 12% de chance de fracasso, principalmente porque o medicamento pode funcionar bem menos do que se espera. Esse risco não desaparece com mais pacientes.</p>
+
+    <h3 lang="en">Example B: a survival trial, and a trap</h3>
+    <h3 lang="pt">Exemplo B: um ensaio de sobrevida, e uma armadilha</h3>
+    <p lang="en">A team believes the hazard ratio is between 0.5 and 1.0 (best guess ≈ 0.71). Control median survival is 12 months, with 12 months of recruitment, 12 months of extra follow-up and 5% loss to follow-up. The test is one-sided ("treatment &lt; control") with α = 0.025.</p>
+    <p lang="pt">Uma equipe acredita que a razão de riscos está entre 0,5 e 1,0 (melhor palpite ≈ 0,71). A mediana de sobrevida no controle é de 12 meses, com 12 meses de recrutamento, 12 meses de seguimento adicional e 5% de perda de seguimento. O teste é unilateral ("tratamento &lt; controle") com α = 0,025.</p>
+    <div class="note danger">
+      <strong lang="en">The trap: reusing an optimistic prior for the analysis</strong><strong lang="pt">A armadilha: reutilizar uma priori otimista na análise</strong>
+      <span lang="en">If you tick "Analyse with the same prior", the prior alone already gives about a 98% chance that HR &lt; 1, above the 97.5% needed. The "trial" would succeed with almost no data, and the app would report absurd sample sizes of a handful of patients. AssuRance detects this and shows a red warning. The fix: use a <strong>sceptical</strong> analysis prior.</span>
+      <span lang="pt">Se você marcar "Analyse with the same prior" (analisar com a mesma priori), a priori sozinha já dá cerca de 98% de chance de HR &lt; 1, acima dos 97,5% exigidos. O "ensaio" teria sucesso quase sem dados, e o aplicativo mostraria tamanhos amostrais absurdos, de poucos pacientes. O AssuRance detecta isso e mostra um alerta vermelho. A solução: usar uma priori de análise <strong>cética</strong>.</span>
+    </div>
+    <p lang="en">With a sceptical analysis prior (HR between 0.5 and 2, centred on 1):</p>
+    <p lang="pt">Com uma priori de análise cética (HR entre 0,5 e 2, centrada em 1):</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th></th><th><span lang="en">Frequentist power</span><span lang="pt">Poder frequentista</span></th><th><span lang="en">Bayesian assurance</span><span lang="pt"><em>Assurance</em> bayesiana</span></th></tr></thead>
+      <tbody>
+        <tr><td><span lang="en">At 500 per group</span><span lang="pt">Com 500 por grupo</span></td><td>98.4%</td><td>82.2%</td></tr>
+        <tr><td><span lang="en">n per group for 80%</span><span lang="pt">n por grupo para 80%</span></td><td><span lang="en">235 (~266 events)</span><span lang="pt">235 (~266 eventos)</span></td><td><span lang="en">436 (~493 events)</span><span lang="pt">436 (~493 eventos)</span></td></tr>
+        <tr><td><span lang="en">Assurance ceiling</span><span lang="pt">Teto da <em>assurance</em></span></td><td colspan="2">97.5% <span lang="en">(the prior gives a 2.5% chance that HR ≥ 1)</span><span lang="pt">(a priori dá 2,5% de chance de HR ≥ 1)</span></td></tr>
+      </tbody></table></div>
+    <p lang="en"><strong>Lesson:</strong> once uncertainty about the hazard ratio is taken seriously, reaching 80% assurance needs nearly twice as many patients and events as the classic calculation suggests.</p>
+    <p lang="pt"><strong>Lição:</strong> quando a incerteza sobre a razão de riscos é levada a sério, chegar a 80% de <em>assurance</em> exige quase o dobro de pacientes e eventos sugeridos pelo cálculo clássico.</p>
+    <figure>
+      <img class="shot" src="screenshot-survival.png" alt="Survival example in the app" loading="lazy">
+      <figcaption lang="en">Example B in the app.</figcaption><figcaption lang="pt">O exemplo B no aplicativo.</figcaption>
+    </figure>
+    <p class="small muted" lang="en">Simulated values (2,000 trials per sample size, seed 2024) can differ from yours by a percentage point or so; sample sizes come from the exact formula.</p>
+    <p class="small muted" lang="pt">Os valores simulados (2.000 ensaios por tamanho amostral, semente 2024) podem diferir dos seus em cerca de um ponto percentual; os tamanhos amostrais vêm da fórmula exata.</p>
+  </div>
+</section>
+
+<!-- ============================================================ PRIORS -->
+<section id="priors">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="en">Practical advice</span><span lang="pt">Conselhos práticos</span></div>
+    <h2 lang="en">Choosing priors well</h2>
+    <h2 lang="pt">Escolhendo bem as prioris</h2>
+    <div class="grid g2">
+      <div class="card">
+        <h3 lang="en">Design prior: be honest</h3><h3 lang="pt">Priori de planejamento: seja honesto</h3>
+        <ul>
+          <li lang="en">Start from the best evidence: meta-analyses, then large trials, then smaller trials and observational data.</li>
+          <li lang="pt">Parta da melhor evidência: metanálises, depois grandes ensaios, depois ensaios menores e dados observacionais.</li>
+          <li lang="en">Effects from small or early-phase trials tend to <strong>shrink</strong> in larger confirmatory trials. Discount them.</li>
+          <li lang="pt">Efeitos de ensaios pequenos ou de fases iniciais tendem a <strong>encolher</strong> em ensaios confirmatórios maiores. Desconte-os.</li>
+          <li lang="en">Use the width of a <strong>prediction interval</strong> (which includes differences between studies), not just a confidence interval: SD ≈ (upper − lower) / 3.92.</li>
+          <li lang="pt">Use a largura de um <strong>intervalo de predição</strong> (que inclui as diferenças entre estudos), e não apenas um intervalo de confiança: DP ≈ (superior − inferior) / 3,92.</li>
+          <li lang="en">With little evidence, prefer a wider prior. Consider structured expert elicitation (e.g. the SHELF method).</li>
+          <li lang="pt">Com pouca evidência, prefira uma priori mais larga. Considere uma elicitação estruturada de especialistas (ex.: método SHELF).</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 lang="en">Analysis prior: be credible</h3><h3 lang="pt">Priori de análise: seja crível</h3>
+        <ul>
+          <li lang="en">For confirmatory or regulatory-facing trials, use a <strong>sceptical</strong> prior (centred on no effect) or a <strong>vague</strong> one (very wide).</li>
+          <li lang="pt">Para ensaios confirmatórios ou voltados a agências reguladoras, use uma priori <strong>cética</strong> (centrada em efeito nulo) ou <strong>vaga</strong> (muito larga).</li>
+          <li lang="en">A vague analysis prior makes the Bayesian analysis behave much like a classical one.</li>
+          <li lang="pt">Uma priori de análise vaga faz a análise bayesiana se comportar de modo muito parecido com a clássica.</li>
+          <li lang="en">Reusing the design prior ("Analyse with the same prior") builds your optimism into the conclusion. Fine for exploring, risky for a protocol.</li>
+          <li lang="pt">Reutilizar a priori de planejamento ("Analyse with the same prior") incorpora seu otimismo na conclusão. Serve para explorar, é arriscado para um protocolo.</li>
+          <li lang="en">Check the Sensitivity tab: if the answer changes a lot with the analysis prior, discuss it with your statistician.</li>
+          <li lang="pt">Confira a aba Sensitivity: se a resposta muda muito com a priori de análise, discuta com seu estatístico.</li>
+        </ul>
+      </div>
+    </div>
+    <h3 lang="en">Common pitfalls</h3><h3 lang="pt">Armadilhas comuns</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th><span lang="en">Pitfall</span><span lang="pt">Armadilha</span></th><th><span lang="en">Symptom in the app</span><span lang="pt">Sintoma no aplicativo</span></th><th><span lang="en">What to do</span><span lang="pt">O que fazer</span></th></tr></thead>
+      <tbody>
+        <tr><td><span lang="en">Overconfident design prior (SD too small)</span><span lang="pt">Priori de planejamento confiante demais (DP muito pequeno)</span></td><td><span lang="en">Assurance ≈ power</span><span lang="pt"><em>Assurance</em> ≈ poder</span></td><td><span lang="en">Widen it to reflect real uncertainty</span><span lang="pt">Alargue-a para refletir a incerteza real</span></td></tr>
+        <tr><td><span lang="en">Analysis prior alone meets the success rule</span><span lang="pt">A priori de análise sozinha atinge a regra de sucesso</span></td><td><span lang="en">Red warning; tiny "required" n</span><span lang="pt">Alerta vermelho; n "necessário" minúsculo</span></td><td><span lang="en">Use a sceptical analysis prior</span><span lang="pt">Use uma priori de análise cética</span></td></tr>
+        <tr><td><span lang="en">Target above the ceiling</span><span lang="pt">Meta acima do teto</span></td><td><span lang="en">"Not reachable"</span><span lang="pt">"Not reachable" (inatingível)</span></td><td><span lang="en">Reconsider the target, the threshold or the treatment</span><span lang="pt">Reconsidere a meta, o limiar ou o tratamento</span></td></tr>
+        <tr><td><span lang="en">Two-sided test counts "wrong-direction" wins</span><span lang="pt">Teste bilateral conta "vitórias na direção errada"</span></td><td><span lang="en">Note in the summary</span><span lang="pt">Nota no resumo</span></td><td><span lang="en">Consider a one-sided test in the expected direction</span><span lang="pt">Considere um teste unilateral na direção esperada</span></td></tr>
+        <tr><td><span lang="en">Few events (binary or survival)</span><span lang="pt">Poucos eventos (binário ou sobrevida)</span></td><td><span lang="en">Note in the summary; simulation and exact differ</span><span lang="pt">Nota no resumo; simulação e exato divergem</span></td><td><span lang="en">Trust the simulation; consider a larger or longer trial</span><span lang="pt">Confie na simulação; considere um ensaio maior ou mais longo</span></td></tr>
+        <tr><td><span lang="en">Wrong sign for the effect</span><span lang="pt">Sinal errado para o efeito</span></td><td><span lang="en">Assurance near zero</span><span lang="pt"><em>Assurance</em> perto de zero</span></td><td><span lang="en">Check the direction: effects are always treatment vs control</span><span lang="pt">Verifique a direção: efeitos são sempre tratamento vs controle</span></td></tr>
+      </tbody></table></div>
+  </div>
+</section>
+
+<!-- ============================================================ REPORTING -->
+<section id="reporting">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="en">Writing it up</span><span lang="pt">Como escrever</span></div>
+    <h2 lang="en">Reporting assurance in a protocol</h2>
+    <h2 lang="pt">Relatando a <em>assurance</em> em um protocolo</h2>
+    <p lang="en">Report both numbers, and all the inputs behind them. A template, based on Example A:</p>
+    <p lang="pt">Relate os dois números e todas as entradas por trás deles. Um modelo, baseado no Exemplo A:</p>
+    <div class="note">
+      <span lang="en">"With 77 participants per group, the trial has an estimated 80% Bayesian assurance (probability of success), accounting for uncertainty about the treatment effect (design and analysis prior: normal, mean 5 mmHg, SD 3 mmHg; outcome SD 10 mmHg; two-sided α = 0.05). For comparison, the conventional power for an assumed effect of exactly 5 mmHg is 87%. Assurance was computed by simulation with the bayesassurance R package, using the AssuRance app."</span>
+      <span lang="pt">"Com 77 participantes por grupo, o ensaio tem <em>assurance</em> bayesiana (probabilidade de sucesso) estimada em 80%, considerando a incerteza sobre o efeito do tratamento (priori de planejamento e de análise: normal, média 5 mmHg, DP 3 mmHg; DP do desfecho 10 mmHg; α bilateral = 0,05). Para comparação, o poder convencional, supondo um efeito de exatamente 5 mmHg, é de 87%. A <em>assurance</em> foi calculada por simulação com o pacote R bayesassurance, usando o aplicativo AssuRance."</span>
+    </div>
+    <p class="small muted" lang="en">Use the "Report (.txt)" download to get every input and the summary in one file. The numbers in this template are illustrative; use your own results.</p>
+    <p class="small muted" lang="pt">Use o download "Report (.txt)" para obter todas as entradas e o resumo em um único arquivo. Os números deste modelo são ilustrativos; use os seus próprios resultados.</p>
+  </div>
+</section>
+
+<!-- ============================================================ FAQ -->
+<section id="faq">
+  <div class="wrap">
+    <div class="eyebrow">FAQ</div>
+    <h2 lang="en">Frequently asked questions</h2><h2 lang="pt">Perguntas frequentes</h2>
+    <details><summary><span lang="en">Why is my assurance lower than my power?</span><span lang="pt">Por que minha <em>assurance</em> é menor que meu poder?</span></summary>
+      <p lang="en">Because it also counts the plausible worlds in which the treatment works less well than your best guess, or not at all. That's the point: it is a more honest planning number. Assurance can also be <em>higher</em> than power at small sample sizes, when an informative analysis prior helps the analysis.</p>
+      <p lang="pt">Porque ela também conta os mundos plausíveis em que o tratamento funciona pior que seu melhor palpite, ou nem funciona. Essa é a ideia: é um número de planejamento mais honesto. A <em>assurance</em> também pode ser <em>maior</em> que o poder em amostras pequenas, quando uma priori de análise informativa ajuda a análise.</p></details>
+    <details><summary><span lang="en">Is 80% assurance equivalent to 80% power?</span><span lang="pt">80% de <em>assurance</em> equivale a 80% de poder?</span></summary>
+      <p lang="en">No. They answer different questions. Many teams find that 80% power corresponds to a much lower assurance, and choose their target assurance with that in mind (sometimes 60–70% is considered acceptable for a risky but important question). Discuss the target with your team and funder.</p>
+      <p lang="pt">Não. Eles respondem a perguntas diferentes. Muitas equipes percebem que 80% de poder corresponde a uma <em>assurance</em> bem menor, e escolhem a meta de <em>assurance</em> com isso em mente (às vezes 60–70% é considerado aceitável para uma pergunta arriscada mas importante). Discuta a meta com sua equipe e financiador.</p></details>
+    <details><summary><span lang="en">Should I use simulation or the exact engine?</span><span lang="pt">Devo usar a simulação ou o cálculo exato?</span></summary>
+      <p lang="en">Use <strong>exact</strong> to explore quickly, then confirm with <strong>simulation</strong>. For binary and survival outcomes with few events, the simulation is more trustworthy, because it analyses actual simulated counts rather than relying on an approximation.</p>
+      <p lang="pt">Use o <strong>exato</strong> para explorar rapidamente e depois confirme com a <strong>simulação</strong>. Para desfechos binários e de sobrevida com poucos eventos, a simulação é mais confiável, pois analisa contagens simuladas reais em vez de depender de uma aproximação.</p></details>
+    <details><summary><span lang="en">Why doesn't the app use the package's closed-form or binary functions?</span><span lang="pt">Por que o aplicativo não usa as funções de forma fechada ou binária do pacote?</span></summary>
+      <p lang="en">They were reviewed carefully. The closed form <code>assurance_nd_na()</code> ties the analysis prior's centre to the null value. <code>bayes_sim_betabin()</code> draws the true proportions only once per run, so it does not average over the design prior. <code>bayes_sim_unknownvar()</code> builds a matrix of the wrong size for two-group designs. The package has no survival functions. The app uses <code>bayes_sim_unbalanced()</code> for continuous outcomes and validated built-in simulators for the rest.</p>
+      <p lang="pt">Elas foram analisadas com cuidado. A forma fechada <code>assurance_nd_na()</code> amarra o centro da priori de análise ao valor nulo. <code>bayes_sim_betabin()</code> sorteia as proporções verdadeiras apenas uma vez por execução, então não faz a média sobre a priori de planejamento. <code>bayes_sim_unknownvar()</code> monta uma matriz de tamanho errado para desenhos com dois grupos. O pacote não tem funções de sobrevida. O aplicativo usa <code>bayes_sim_unbalanced()</code> para desfechos contínuos e simuladores próprios validados para os demais.</p></details>
+    <details><summary><span lang="en">My simulation is slow. What can I do?</span><span lang="pt">Minha simulação está lenta. O que posso fazer?</span></summary>
+      <p lang="en">For continuous outcomes the cost grows with the square of the sample size. Use fewer sample sizes (a larger step), fewer simulated trials while exploring, or the exact engine. You can press <strong>Stop run</strong> at any time, and your previous results are kept.</p>
+      <p lang="pt">Para desfechos contínuos, o custo cresce com o quadrado do tamanho amostral. Use menos tamanhos amostrais (um passo maior), menos ensaios simulados durante a exploração, ou o cálculo exato. Você pode apertar <strong>Stop run</strong> a qualquer momento, e os resultados anteriores são mantidos.</p></details>
+    <details><summary><span lang="en">Can I use it for cluster, crossover or multi-arm trials?</span><span lang="pt">Posso usar para ensaios por conglomerados, cruzados ou com múltiplos braços?</span></summary>
+      <p lang="en">Not directly. The app covers two-arm, individually randomised, parallel-group trials. For a cluster trial, you can roughly inflate the sample size by the design effect 1 + (m − 1)·ICC, but a dedicated tool is better.</p>
+      <p lang="pt">Não diretamente. O aplicativo cobre ensaios de dois braços, com randomização individual e grupos paralelos. Para um ensaio por conglomerados, dá para inflar grosseiramente o tamanho amostral pelo efeito de desenho 1 + (m − 1)·ICC, mas uma ferramenta dedicada é melhor.</p></details>
+    <details><summary><span lang="en">Is my data stored anywhere?</span><span lang="pt">Meus dados ficam armazenados em algum lugar?</span></summary>
+      <p lang="en">No. The app has no database and does not save your inputs. The bookmark link simply encodes your inputs in the URL. Saved scenarios live only in your browser session.</p>
+      <p lang="pt">Não. O aplicativo não tem banco de dados e não salva suas entradas. O link de marcador apenas codifica suas entradas na URL. Os cenários salvos existem só na sua sessão do navegador.</p></details>
+  </div>
+</section>
+
+<!-- ============================================================ METHODS -->
+<section id="methods">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="en">For statisticians</span><span lang="pt">Para estatísticos</span></div>
+    <h2 lang="en">Methods and assumptions</h2><h2 lang="pt">Métodos e suposições</h2>
+    <p lang="en">Every outcome type is reduced to an effect θ on a working scale on which its estimate is approximately normal, θ̂ ~ N(θ, v): mean difference, adjusted mean difference, log odds ratio, log risk ratio, risk difference or log hazard ratio. The design prior is θ ~ N(m<sub>d</sub>, s<sub>d</sub>²) and the analysis prior θ ~ N(m<sub>a</sub>, s<sub>a</sub>²). The posterior is normal with precision 1/s<sub>a</sub>² + 1/v, and success means that the posterior probability beyond the threshold C exceeds 1 − α (per tail 1 − α/2 for two-sided tests).</p>
+    <p lang="pt">Cada tipo de desfecho é reduzido a um efeito θ em uma escala de trabalho na qual a estimativa é aproximadamente normal, θ̂ ~ N(θ, v): diferença de médias, diferença de médias ajustada, log da razão de chances, log do risco relativo, diferença de riscos ou log da razão de riscos. A priori de planejamento é θ ~ N(m<sub>d</sub>, s<sub>d</sub>²) e a de análise θ ~ N(m<sub>a</sub>, s<sub>a</sub>²). A posteriori é normal com precisão 1/s<sub>a</sub>² + 1/v, e sucesso significa que a probabilidade posteriori além do limiar C excede 1 − α (1 − α/2 por cauda em testes bilaterais).</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th><span lang="en">Outcome</span><span lang="pt">Desfecho</span></th><th><span lang="en">Variance v</span><span lang="pt">Variância v</span></th></tr></thead>
+      <tbody>
+        <tr><td><span lang="en">Continuous</span><span lang="pt">Contínuo</span></td><td>σ²(1/n<sub>T</sub> + 1/n<sub>C</sub>)</td></tr>
+        <tr><td>ANCOVA</td><td>σ²(1 − ρ²)(1/n<sub>T</sub> + 1/n<sub>C</sub>)(1 + 1/(N − 4))</td></tr>
+        <tr><td><span lang="en">Binary, log OR</span><span lang="pt">Binário, log OR</span></td><td>1/(n<sub>T</sub>p<sub>T</sub>q<sub>T</sub>) + 1/(n<sub>C</sub>p<sub>C</sub>q<sub>C</sub>)</td></tr>
+        <tr><td><span lang="en">Binary, log RR</span><span lang="pt">Binário, log RR</span></td><td>q<sub>T</sub>/(n<sub>T</sub>p<sub>T</sub>) + q<sub>C</sub>/(n<sub>C</sub>p<sub>C</sub>)</td></tr>
+        <tr><td><span lang="en">Binary, risk difference</span><span lang="pt">Binário, diferença de riscos</span></td><td>p<sub>T</sub>q<sub>T</sub>/n<sub>T</sub> + p<sub>C</sub>q<sub>C</sub>/n<sub>C</sub></td></tr>
+        <tr><td><span lang="en">Time to event, log HR</span><span lang="pt">Tempo até evento, log HR</span></td><td>1/E[D<sub>T</sub>] + 1/E[D<sub>C</sub>] <span lang="en">(expected events; exponential model with uniform accrual and loss to follow-up)</span><span lang="pt">(eventos esperados; modelo exponencial com recrutamento uniforme e perda de seguimento)</span></td></tr>
+      </tbody></table></div>
+    <ul>
+      <li lang="en"><strong>Exact engine:</strong> closed form when v is constant; otherwise numerical integration over the design prior (1,601-point grid over ±8 SD).</li>
+      <li lang="pt"><strong>Cálculo exato:</strong> forma fechada quando v é constante; caso contrário, integração numérica sobre a priori de planejamento (grade de 1.601 pontos em ±8 DP).</li>
+      <li lang="en"><strong>Simulation:</strong> each virtual trial draws its own θ from the design prior. Continuous outcomes use <code>bayesassurance::bayes_sim_unbalanced</code> (prior variances are relative to σ² in its parameterisation). Binary and survival outcomes simulate binomial counts or patient-level survival data.</li>
+      <li lang="pt"><strong>Simulação:</strong> cada ensaio virtual sorteia seu próprio θ da priori de planejamento. Desfechos contínuos usam <code>bayesassurance::bayes_sim_unbalanced</code> (na sua parametrização, as variâncias da priori são relativas a σ²). Desfechos binários e de sobrevida simulam contagens binomiais ou dados de sobrevida por paciente.</li>
+      <li lang="en"><strong>Power:</strong> t-test (two-sample or ANCOVA) for continuous outcomes, identical to <code>stats::power.t.test</code> for equal groups; Wald z-test on the working scale for binary and survival outcomes.</li>
+      <li lang="pt"><strong>Poder:</strong> teste t (duas amostras ou ANCOVA) para desfechos contínuos, idêntico ao <code>stats::power.t.test</code> para grupos iguais; teste z de Wald na escala de trabalho para desfechos binários e de sobrevida.</li>
+      <li lang="en"><strong>Validation:</strong> 82 automated checks compare simulation with exact results across all outcome types, and power with standard formulas.</li>
+      <li lang="pt"><strong>Validação:</strong> 82 verificações automáticas comparam a simulação com os resultados exatos em todos os tipos de desfecho, e o poder com fórmulas padrão.</li>
+      <li lang="en"><strong>Limitations:</strong> nuisance parameters (SD, correlation, control event rate, control median) are treated as known; survival assumes exponential times and proportional hazards; normal approximations are rough with very few events.</li>
+      <li lang="pt"><strong>Limitações:</strong> parâmetros de incômodo (DP, correlação, taxa de eventos no controle, mediana no controle) são tratados como conhecidos; a sobrevida supõe tempos exponenciais e riscos proporcionais; aproximações normais são grosseiras com pouquíssimos eventos.</li>
+    </ul>
+    <h3 lang="en">References</h3><h3 lang="pt">Referências</h3>
+    <ul class="small">
+      <li>O'Hagan A, Stevens JW (2001). Bayesian assessment of sample size for clinical trials of cost-effectiveness. <em>Medical Decision Making</em> 21(3):219–230.</li>
+      <li>O'Hagan A, Stevens JW, Campbell MJ (2005). Assurance in clinical trial design. <em>Pharmaceutical Statistics</em> 4(3):187–201.</li>
+      <li>Wang F, Gelfand AE (2002). A simulation-based approach to Bayesian sample size determination for performance under a given model and for separating models. <em>Statistical Science</em> 17(2):193–208.</li>
+      <li>Ren S, Oakley JE (2014). Assurance calculations for planning clinical trials with time-to-event outcomes. <em>Statistics in Medicine</em> 33(1):31–45.</li>
+      <li>Schoenfeld DA (1983). Sample-size formula for the proportional-hazards regression model. <em>Biometrics</em> 39(2):499–503.</li>
+      <li>Borm GF, Fransen J, Lemmens WA (2007). A simple sample size formula for analysis of covariance in randomized clinical trials. <em>Journal of Clinical Epidemiology</em> 60(12):1234–1238.</li>
+      <li>Pan J, Banerjee S (2023). bayesassurance: An R package for calculating sample size and Bayesian assurance. <em>The R Journal</em>. <a href="https://journal.r-project.org/articles/RJ-2023-066/">RJ-2023-066</a></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================================ RUN -->
+<section id="run">
+  <div class="wrap">
+    <div class="eyebrow"><span lang="en">Open source</span><span lang="pt">Código aberto</span></div>
+    <h2 lang="en">Run it yourself</h2><h2 lang="pt">Rode você mesmo</h2>
+    <ol class="steps">
+      <li lang="en">In RStudio: <em>File → New Project → Version Control → Git</em>, URL <code>https://github.com/drhrf/AssuRance.git</code>.</li>
+      <li lang="pt">No RStudio: <em>File → New Project → Version Control → Git</em>, URL <code>https://github.com/drhrf/AssuRance.git</code>.</li>
+      <li lang="en">Install the packages once: <code>source("setup.R")</code>.</li>
+      <li lang="pt">Instale os pacotes uma vez: <code>source("setup.R")</code>.</li>
+      <li lang="en">Open <code>app.R</code> and click <strong>Run App</strong>.</li>
+      <li lang="pt">Abra o <code>app.R</code> e clique em <strong>Run App</strong>.</li>
+    </ol>
+    <p lang="en">Found a problem or have an idea? <a href="https://github.com/drhrf/AssuRance/issues">Open an issue on GitHub</a>.</p>
+    <p lang="pt">Encontrou um problema ou tem uma ideia? <a href="https://github.com/drhrf/AssuRance/issues">Abra uma <em>issue</em> no GitHub</a>.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p lang="en">AssuRance is a planning aid, not a substitute for a statistician. Always review sample-size decisions with your trial statistician.</p>
+    <p lang="pt">O AssuRance é uma ferramenta de apoio ao planejamento, não um substituto para um estatístico. Sempre revise decisões de tamanho amostral com o estatístico do seu ensaio.</p>
+    <p><a href="https://github.com/drhrf/AssuRance">github.com/drhrf/AssuRance</a></p>
+  </div>
+</footer>
+
+<script>
+/* ------------------------------------------------------------------ config */
+// Public app URL (Posit Cloud). Leave empty until the app is published.
+const APP_URL = "";
+
+/* ------------------------------------------------------------------ language */
+const TITLES = {
+  en: "AssuRance: a guide to Bayesian assurance",
+  pt: "AssuRance: um guia para a assurance bayesiana"
+};
+function setLang(lang) {
+  const root = document.documentElement;
+  root.dataset.lang = lang;
+  root.lang = lang === "pt" ? "pt-BR" : "en";
+  document.title = TITLES[lang];
+  try { localStorage.setItem("assurance-lang", lang); } catch (e) {}
+  renderDemo();
+}
+function initialLang() {
+  try {
+    const url = new URLSearchParams(location.search).get("lang");
+    if (url === "pt" || url === "en") return url;
+    const saved = localStorage.getItem("assurance-lang");
+    if (saved === "pt" || saved === "en") return saved;
+  } catch (e) {}
+  return (navigator.language || "").toLowerCase().startsWith("pt") ? "pt" : "en";
+}
+document.getElementById("langBtn").addEventListener("click", () =>
+  setLang(document.documentElement.dataset.lang === "pt" ? "en" : "pt"));
+
+/* ------------------------------------------------------------------ app link */
+(function () {
+  const btn = document.getElementById("appBtn");
+  if (APP_URL) { btn.href = APP_URL; }
+  else {
+    btn.setAttribute("aria-disabled", "true");
+    btn.removeAttribute("target");
+    btn.href = "#run";
+    document.getElementById("appSoon").hidden = false;
+  }
+})();
+
+/* ------------------------------------------------------------------ demo math */
+// Standard normal CDF (Abramowitz & Stegun 7.1.26 on erf; |error| < 1.5e-7).
+function pnorm(x) {
+  const t = 1 / (1 + 0.3275911 * Math.abs(x) / Math.SQRT2);
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t *
+            Math.exp(-x * x / 2);
+  return x >= 0 ? 0.5 * (1 + y) : 0.5 * (1 - y);
+}
+const Z = { "0.1": 1.6448536, "0.05": 1.9599640, "0.01": 2.5758293 };
+// Two-sided z-test with a vague analysis prior: success when |d| > z*sqrt(v),
+// d ~ N(mean, sd^2 + v). Power is the same with sd = 0.
+function successProb(mean, sd, sigma, n, z) {
+  const v = 2 * sigma * sigma / n, s = Math.sqrt(sd * sd + v), c = z * Math.sqrt(v);
+  return pnorm((mean - c) / s) + pnorm((-c - mean) / s);
+}
+function smallestN(mean, sd, sigma, z, target) {
+  for (let n = 2; n <= 20000; n++) if (successProb(mean, sd, sigma, n, z) >= target) return n;
+  return null;
+}
+
+const $ = id => document.getElementById(id);
+const pct = x => (100 * x).toFixed(1).replace(".", document.documentElement.dataset.lang === "pt" ? "," : ".") + "%";
+const num = x => String(x).replace(".", document.documentElement.dataset.lang === "pt" ? "," : ".");
+
+function renderDemo() {
+  const m = +$("dMean").value, s = +$("dSd").value, sg = +$("dSigma").value, n = +$("dN").value, a = $("dAlpha").value;
+  const z = Z[a];
+  $("oMean").textContent = num(m); $("oSd").textContent = num(s); $("oSigma").textContent = sg; $("oN").textContent = n;
+  const pw = successProb(m, 0, sg, n, z), as = successProb(m, s, sg, n, z);
+  $("kPow").textContent = pct(pw); $("kAss").textContent = pct(as);
+  $("kGap").textContent = (100 * (pw - as)).toFixed(0);
+  const nP = smallestN(m, 0, sg, z, 0.8), nA = smallestN(m, s, sg, z, 0.8);
+  const pt = document.documentElement.dataset.lang === "pt";
+  const nTxt = x => x === null ? (pt ? "nenhum tamanho viável" : "no feasible size") : x;
+  let txt = pt
+    ? `Com ${n} por grupo: poder ${pct(pw)}, <em>assurance</em> ${pct(as)}. Para 80%, o poder pede ${nTxt(nP)} por grupo; a <em>assurance</em> pede ${nTxt(nA)}.`
+    : `With ${n} per group: power ${pct(pw)}, assurance ${pct(as)}. For 80%, power asks for ${nTxt(nP)} per group; assurance asks for ${nTxt(nA)}.`;
+  if (s === 0) txt += pt ? " Com incerteza zero, as duas coincidem." : " With zero uncertainty, the two coincide.";
+  else if (pw - as > 0.15) txt += pt ? " A diferença passa de 15 pontos: o sucesso depende muito de o seu palpite estar certo."
+                                     : " The gap exceeds 15 points: success depends heavily on your guess being right.";
+  $("demoText").innerHTML = txt;
+  drawChart(m, s, sg, z, n);
+}
+
+function drawChart(m, s, sg, z, nSel) {
+  const svg = $("demoChart"), W = 600, H = 320, L = 46, R = 14, T = 40, B = 40;
+  const nMax = 500, x = n => L + (n - 10) / (nMax - 10) * (W - L - R), y = p => T + (1 - p) * (H - T - B);
+  const css = getComputedStyle(document.documentElement);
+  const cA = css.getPropertyValue("--accent").trim(), cP = css.getPropertyValue("--power").trim();
+  const cL = css.getPropertyValue("--line").trim(), cM = css.getPropertyValue("--muted").trim();
+  const pt = document.documentElement.dataset.lang === "pt";
+  let pP = "", pA = "";
+  for (let n = 10; n <= nMax; n += 5) {
+    pP += `${x(n).toFixed(1)},${y(successProb(m, 0, sg, n, z)).toFixed(1)} `;
+    pA += `${x(n).toFixed(1)},${y(successProb(m, s, sg, n, z)).toFixed(1)} `;
+  }
+  let g = "";
+  for (const p of [0, 0.2, 0.4, 0.6, 0.8, 1]) {
+    g += `<line x1="${L}" x2="${W - R}" y1="${y(p)}" y2="${y(p)}" stroke="${cL}" stroke-width="1" ${p === 0.8 ? 'stroke-dasharray="4 4"' : ""}/>`;
+    g += `<text x="${L - 6}" y="${y(p) + 4}" text-anchor="end" font-size="12" fill="${cM}">${p * 100}%</text>`;
+  }
+  for (const n of [100, 200, 300, 400, 500])
+    g += `<text x="${x(n)}" y="${H - B + 16}" text-anchor="middle" font-size="12" fill="${cM}">${n}</text>`;
+  g += `<text x="${(L + W - R) / 2}" y="${H - 6}" text-anchor="middle" font-size="12" fill="${cM}">${pt ? "Participantes por grupo" : "Participants per group"}</text>`;
+  g += `<line x1="${x(nSel)}" x2="${x(nSel)}" y1="${T}" y2="${H - B}" stroke="${cM}" stroke-width="1" stroke-dasharray="2 3"/>`;
+  g += `<polyline points="${pP}" fill="none" stroke="${cP}" stroke-width="3" stroke-dasharray="7 5"/>`;
+  g += `<polyline points="${pA}" fill="none" stroke="${cA}" stroke-width="3"/>`;
+  g += `<circle cx="${x(nSel)}" cy="${y(successProb(m, 0, sg, nSel, z))}" r="5" fill="${cP}"/>`;
+  g += `<circle cx="${x(nSel)}" cy="${y(successProb(m, s, sg, nSel, z))}" r="5" fill="${cA}"/>`;
+  g += `<g font-size="13"><line x1="${L}" x2="${L + 24}" y1="14" y2="14" stroke="${cA}" stroke-width="3"/>
+        <text x="${L + 30}" y="18" fill="${cA}">${pt ? "Assurance bayesiana" : "Bayesian assurance"}</text>
+        <line x1="${L + 200}" x2="${L + 224}" y1="14" y2="14" stroke="${cP}" stroke-width="3" stroke-dasharray="7 5"/>
+        <text x="${L + 230}" y="18" fill="${cP}">${pt ? "Poder frequentista" : "Frequentist power"}</text></g>`;
+  svg.innerHTML = g;
+}
+
+for (const id of ["dMean", "dSd", "dSigma", "dN", "dAlpha"]) $(id).addEventListener("input", renderDemo);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", renderDemo);
+setLang(initialLang());
+</script>
+</body>
+</html>

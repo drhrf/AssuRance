@@ -214,8 +214,8 @@ server <- function(input, output, session) {
 
   output$engine_note <- renderUI({
     m <- live_model(); req(m)
-    tags$div(class = "form-text", "Simulation engine: ", m$engine_label,
-             ". Frequentist comparison: ", m$power_label, ".")
+    tags$div(class = "form-text", paste0("Simulation engine: ", m$engine_label,
+                                         ". Frequentist comparison: ", m$power_label, "."))
   })
 
   output$effect_hint <- renderUI({
@@ -224,7 +224,8 @@ server <- function(input, output, session) {
     lo <- m$m_d - z * m$s_d; hi <- m$m_d + z * m$s_d
     txt <- switch(m$family,
       additive = paste0("Effect = ", m$labels$short, " (treatment minus control). ",
-                        "Your design prior's 95% range: ", fmt_num(lo), " to ", fmt_num(hi), "."),
+                        "Your design prior's 95% range: ", fmt_num(signif(lo, 3)), " to ",
+                        fmt_num(signif(hi, 3)), "."),
       rd = paste0("Effect = treatment minus control event rate (percentage points; ",
                   "negative = fewer events with treatment). Implied treatment-group ",
                   "event rate: about ", fmt_pct(m$p_t(m$m_d), 0), " (95% range ",
@@ -233,7 +234,7 @@ server <- function(input, output, session) {
         if (grepl("^[aeiou]", m$labels$short)) "An " else "A ", m$labels$short, " below 1 means ",
         if (m$otype == "surv") "a lower event rate (longer time to event)" else "fewer events",
         " with treatment. Your range implies a best guess of ", m$fmt_eff(m$m_d),
-        " (SD of the log ", m$labels$short, " ", fmt_num(m$s_d), ") and a ",
+        " (SD of the log ", m$labels$short, " ", fmt_num(signif(m$s_d, 2)), ") and a ",
         fmt_pct(pnorm(-m$m_d / m$s_d), 0), " chance that it is below 1.",
         if (m$otype == "binary") paste0(" Implied treatment-group event rate: about ",
                                         fmt_pct(m$p_t(m$m_d), 0), ".") else ""))

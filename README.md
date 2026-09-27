@@ -4,6 +4,10 @@
 continuous, baseline-adjusted, binary or time-to-event outcomes.**
 
 > **Live app:** _coming soon_
+>
+> **Guide (English / Português):** <https://drhrf.github.io/AssuRance/>, an
+> illustrated, educational walkthrough of the ideas and the app, with an
+> interactive demo.
 
 AssuRance helps you choose a sample size by comparing two ways of asking "how
 likely is this trial to succeed?":
@@ -145,6 +149,14 @@ the same.
   it from GitHub with
   `remotes::install_github("jpan928/bayesassurance_rpackage")`, restart R,
   and publish again.
+
+## The guide website
+
+The bilingual guide lives in `docs/index.html`: a single self-contained page
+with no build step, and screenshots in `docs/img/`. To publish it with GitHub
+Pages, go to the repository's **Settings → Pages**, choose **Deploy from a
+branch**, select the default branch and the **/docs** folder, and save. The
+live-app button reads the `APP_URL` constant at the bottom of the page.
 
 ## Files
 
