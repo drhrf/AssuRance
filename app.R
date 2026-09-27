@@ -155,6 +155,20 @@ ui <- function(request) {
                      class = "btn-outline-secondary btn-sm w-100")
     ),
 
+    # Floating progress box with a Stop button, shown while a simulation runs
+    conditionalPanel(
+      "output.running",
+      div(class = "card shadow",
+          style = "position: fixed; bottom: 20px; right: 20px; width: 340px; z-index: 2000;",
+          div(class = "card-body",
+              strong("Simulating trials with bayesassurance"),
+              uiOutput("run_progress"),
+              actionButton("stop", "Stop run", class = "btn-danger btn-sm w-100 mt-2"),
+              tags$small(class = "d-block text-muted mt-2",
+                         "You can keep using the other tabs meanwhile. Pressing",
+                         "Calculate again restarts with the current inputs.")))
+    ),
+
     navset_card_underline(
       id = "tabs",
 
@@ -391,7 +405,7 @@ ui <- function(request) {
 server <- function(input, output, session) {
 
   setBookmarkExclude(c(
-    "go", "save_scenario", "remove_last", "clear_scenarios", "scenario_label",
+    "go", "stop", "save_scenario", "remove_last", "clear_scenarios", "scenario_label",
     # LLM prompt helper: free text would bloat the bookmark URL
     "pg_title", "pg_condition", "pg_intervention", "pg_comparator",
     "pg_outcome", "pg_timepoint", "pg_phase", "pg_direction", "pg_setting",
@@ -485,28 +499,36 @@ server <- function(input, output, session) {
   })
 
   # ---- Main computation (runs on "Calculate", and once at start-up) -----
-  results <- eventReactive(input$go, {
-    p <- params()
-    inputs_snapshot <- raw_inputs()
-    t0 <- Sys.time()
+  # Why the simulation runs in chunks: R does one thing at a time, so a
+  # single long bayes_sim call would block this app completely. No button
+  # (not even a Stop button) could respond until it finished, and closing the
+  # progress box would only hide it. Instead the simulation is split into
+  # small chunks (see sim_chunk_plan) and a few are run per turn of Shiny's
+  # event loop. Between turns the app handles clicks, so "Stop run" works,
+  # other tabs stay usable, and the run ends if the browser tab is closed.
+  results_rv <- reactiveVal(NULL)   # last completed run
+  run_error  <- reactiveVal(NULL)   # validation message from the last click
+  running    <- reactiveVal(FALSE)
+  progress   <- reactiveVal(list(frac = 0, detail = ""))
+  st <- new.env()                   # the running job (not reactive)
+  st$job <- NULL
 
+  results <- reactive({
+    if (!is.null(run_error())) validate(need(FALSE, run_error()))
+    req(results_rv())
+  })
+
+  # Everything except the simulation itself: exact assurance, power,
+  # sample-size finder and ceiling. `assur` is NULL for the exact engine.
+  finish_run <- function(p, inputs_snapshot, assur, seconds) {
     exact <- exact_assurance(p$n_t, p$n_c, p$design_mean, p$design_sd,
                              p$analysis_mean, p$analysis_sd, p$sigma,
                              p$alpha, p$alt, p$margin)
-    if (p$engine == "sim") {
-      set.seed(p$seed)
-      assur <- withProgress(
-        message = "Simulating trials with bayesassurance", value = 0, {
-          sim_assurance(
-            p$n_t, p$n_c, p$design_mean, p$design_sd, p$analysis_mean,
-            p$analysis_sd, p$sigma, p$alpha, p$alt, p$margin, p$mc_iter,
-            progress = function(i, k) setProgress(
-              i / k, detail = paste0("sample size ", i, " of ", k)))
-        })
-      se <- mc_se(assur, p$mc_iter)
-    } else {
+    if (is.null(assur)) {
       assur <- exact
       se <- NA_real_
+    } else {
+      se <- mc_se(assur, p$mc_iter)
     }
     power <- freq_power(p$n_t, p$n_c, p$design_mean, p$sigma, p$alpha,
                         p$alt, p$margin)
@@ -529,11 +551,121 @@ server <- function(input, output, session) {
       neg_share = if (p$design_mean >= 0) parts$negative else parts$positive
     )
 
-    list(p = p, inputs = inputs_snapshot, metrics = metrics,
-         seconds = as.numeric(difftime(Sys.time(), t0, units = "secs")),
-         table = data.frame(n_t = p$n_t, n_c = p$n_c, assurance = assur,
-                            mc_se = se, exact = exact, power = power))
+    results_rv(list(
+      p = p, inputs = inputs_snapshot, metrics = metrics, seconds = seconds,
+      table = data.frame(n_t = p$n_t, n_c = p$n_c, assurance = assur,
+                         mc_se = se, exact = exact, power = power)))
+  }
+
+  # Start (or restart) a run. ignoreNULL = FALSE also runs it at start-up.
+  observeEvent(input$go, {
+    st$job <- NULL                       # cancel any run in progress
+    p <- tryCatch(params(), error = function(e) e)
+    if (inherits(p, "error")) {
+      running(FALSE)
+      run_error(conditionMessage(p))
+      return()
+    }
+    run_error(NULL)
+    snapshot <- raw_inputs()
+
+    if (p$engine == "exact") {
+      running(FALSE)
+      finish_run(p, snapshot, NULL, 0)
+      return()
+    }
+
+    plan <- sim_chunk_plan(p$n_t, p$n_c, p$mc_iter)
+    per_iter <- vapply(seq_along(p$n_t), function(i)
+      estimate_seconds(p$n_t[i], p$n_c[i], 1), numeric(1))
+    plan$cost <- plan$iters * per_iter[plan$i]
+
+    # The run gets its own random-number stream, saved between chunks, so
+    # nothing else that uses random numbers in the meantime (e.g. drawing a
+    # plot on another tab) can change the results for a given seed.
+    st$job <- list(p = p, inputs = snapshot, plan = plan, next_chunk = 1L,
+                   successes = numeric(length(p$n_c)),
+                   rng = with_seed_state(NULL, function() { set.seed(p$seed); NULL })$state,
+                   t0 = Sys.time())
+    progress(list(frac = 0, detail = "Starting..."))
+    running(TRUE)
   }, ignoreNULL = FALSE)
+
+  # Run chunks for about 0.3 s, then yield to the event loop.
+  observe({
+    req(running())
+    j <- st$job
+    if (is.null(j)) { running(FALSE); return() }
+    p <- j$p
+    tick_start <- Sys.time()
+
+    step <- tryCatch(with_seed_state(j$rng, function() {
+      repeat {
+        ch <- j$plan[j$next_chunk, ]
+        est <- sim_assurance(p$n_t[ch$i], p$n_c[ch$i], p$design_mean,
+                             p$design_sd, p$analysis_mean, p$analysis_sd,
+                             p$sigma, p$alpha, p$alt, p$margin, ch$iters)
+        j$successes[ch$i] <- j$successes[ch$i] + est * ch$iters
+        j$next_chunk <- j$next_chunk + 1L
+        if (j$next_chunk > nrow(j$plan) ||
+            difftime(Sys.time(), tick_start, units = "secs") > 0.3) break
+      }
+      j
+    }), error = function(e) e)
+
+    if (inherits(step, "error")) {
+      st$job <- NULL
+      running(FALSE)
+      showNotification(paste("The simulation failed:", conditionMessage(step)),
+                       type = "error", duration = NULL)
+      return()
+    }
+    j <- step$value
+    j$rng <- step$state
+
+    # A new Calculate click or Stop may have replaced/cleared the job; only
+    # keep going if this is still the current one.
+    if (!identical(st$job$t0, j$t0)) return()
+
+    elapsed <- as.numeric(difftime(Sys.time(), j$t0, units = "secs"))
+    if (j$next_chunk > nrow(j$plan)) {
+      st$job <- NULL
+      running(FALSE)
+      finish_run(p, j$inputs, j$successes / p$mc_iter, elapsed)
+    } else {
+      st$job <- j
+      done <- j$next_chunk - 1L
+      frac <- sum(j$plan$cost[seq_len(done)]) / sum(j$plan$cost)
+      left <- if (frac > 0.02) elapsed / frac * (1 - frac) else NA
+      progress(list(frac = frac, detail = paste0(
+        "Sample size ", j$plan$i[j$next_chunk], " of ", length(p$n_c),
+        if (!is.na(left)) paste0(" \u00B7 about ", format_secs(left), " left") else "")))
+      invalidateLater(10)
+    }
+  })
+
+  observeEvent(input$stop, {
+    if (!is.null(st$job)) {
+      st$job <- NULL
+      running(FALSE)
+      showNotification(paste0("Run stopped. ", if (is.null(results_rv()))
+        "Press Calculate to start again."
+        else "The results shown are from your previous run."), type = "warning")
+    }
+  })
+
+  output$running <- reactive(running())
+  outputOptions(output, "running", suspendWhenHidden = FALSE)
+  output$run_progress <- renderUI({
+    pr <- progress()
+    pct <- round(100 * pr$frac)
+    tagList(
+      div(class = "progress my-2", style = "height: 18px;",
+          div(class = "progress-bar progress-bar-striped progress-bar-animated",
+              role = "progressbar", style = paste0("width: ", max(pct, 2), "%;"),
+              "")),
+      tags$small(class = "text-muted", paste0(pct, "% done \u00B7 ", pr$detail)))
+  })
 
   # Keep the per-tab sample-size selectors in step with the latest run.
   observeEvent(results(), {
@@ -544,7 +676,7 @@ server <- function(input, output, session) {
 
   output$stale <- renderUI({
     res <- tryCatch(results(), error = function(e) NULL)
-    if (is.null(res) || identical(raw_inputs(), res$inputs)) return(NULL)
+    if (running() || is.null(res) || identical(raw_inputs(), res$inputs)) return(NULL)
     div(class = "alert alert-warning py-2 px-3 my-2 small",
         "Inputs have changed. Press Calculate to update the results.")
   })

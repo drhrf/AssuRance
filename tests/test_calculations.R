@@ -75,5 +75,38 @@ check("smallest_n returns NA above the ceiling",
 check("enrolled_n inflates for dropout", enrolled_n(80, 0.2) == 100 && enrolled_n(81, 0.2) == 102)
 check("treatment_n applies the ratio", identical(treatment_n(c(10, 25), 2), c(20, 50)))
 
+# --- 5. Chunked (stoppable) simulation, as run by the app ----------------------
+plan <- sim_chunk_plan(c(20, 300, 800), c(20, 300, 800), 3000)
+check("chunk plan: iterations add up to mc_iter for every sample size",
+      all(tapply(plan$iters, plan$i, sum) == 3000))
+check("chunk plan: large sample sizes are split into several chunks",
+      sum(plan$i == 3) > 1 && sum(plan$i == 1) == 1)
+
+# Mimic the app: run the chunks one by one with a private RNG stream, while
+# other code draws random numbers in between.
+run_chunked <- function(n_t, n_c, mc, seed, meddle = FALSE) {
+  plan <- sim_chunk_plan(n_t, n_c, mc, chunk_seconds = 0.05)
+  rng <- with_seed_state(NULL, function() { set.seed(seed); NULL })$state
+  succ <- numeric(length(n_t))
+  for (r in seq_len(nrow(plan))) {
+    if (meddle) runif(3)   # e.g. a plot being drawn on another tab
+    step <- with_seed_state(rng, function()
+      sim_assurance(n_t[plan$i[r]], n_c[plan$i[r]], 5, 3, 0, 4, 10, 0.05,
+                    "greater", 0, plan$iters[r]))
+    rng <- step$state
+    succ[plan$i[r]] <- succ[plan$i[r]] + step$value * plan$iters[r]
+  }
+  succ / mc
+}
+a1 <- run_chunked(c(30, 150), c(30, 150), 4000, seed = 7)
+a2 <- run_chunked(c(30, 150), c(30, 150), 4000, seed = 7, meddle = TRUE)
+check("chunked run is reproducible and unaffected by other RNG use", identical(a1, a2))
+check("chunked run agrees with the exact assurance",
+      all(abs(a1 - exact_assurance(c(30, 150), c(30, 150), 5, 3, 0, 4, 10, 0.05,
+                                   "greater")) < 4 * 0.5 / sqrt(4000)))
+set.seed(99); before <- runif(1); set.seed(99)
+invisible(with_seed_state(NULL, function() { set.seed(1); runif(5) }))
+check("with_seed_state restores the global random-number stream", runif(1) == before)
+
 if (!ok) stop("Some checks failed.")
 cat("All checks passed.\n")

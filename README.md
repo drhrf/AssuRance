@@ -109,8 +109,9 @@ the same.
   few seconds.
 - The simulation engine gets slower as sample sizes grow (its cost scales with
   the square of the sample size). The sidebar shows an estimated run time,
-  and the app refuses jobs estimated at over 15 minutes. For quick
-  exploration, use the exact engine.
+  and the app refuses jobs estimated at over 15 minutes. While a simulation
+  runs, a progress box with a **Stop run** button appears, and the rest of
+  the app stays usable. For quick exploration, use the exact engine.
 - If publishing fails with an error about `bayesassurance`'s source, reinstall
   it from GitHub with
   `remotes::install_github("jpan928/bayesassurance_rpackage")`, restart R,

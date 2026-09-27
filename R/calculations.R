@@ -277,3 +277,45 @@ estimate_seconds <- function(n_t, n_c, mc_iter) {
   N <- n_t + n_c
   mc_iter * sum(4.5e-5 + 4.5e-9 * N^2)
 }
+
+# Split a simulation into small chunks so the app can stay responsive (and be
+# stopped) while it runs. Each chunk simulates `iters` trials at sample size
+# number `i`; chunks for the same i add up to mc_iter, so combining them
+# (sum of successes / mc_iter) gives exactly the same estimator as one big run.
+# Chunk sizes depend only on the inputs, never on timing, so a fixed seed
+# still gives reproducible results.
+sim_chunk_plan <- function(n_t, n_c, mc_iter, chunk_seconds = 0.4,
+                           min_chunk = 25) {
+  per_iter <- vapply(seq_along(n_t), function(i)
+    estimate_seconds(n_t[i], n_c[i], 1), numeric(1))
+  size <- pmin(mc_iter, pmax(min_chunk, floor(chunk_seconds / per_iter)))
+  do.call(rbind, lapply(seq_along(n_t), function(i) {
+    k <- ceiling(mc_iter / size[i])
+    iters <- rep(size[i], k)
+    iters[k] <- mc_iter - size[i] * (k - 1)
+    data.frame(i = i, iters = iters)
+  }))
+}
+
+# Run fun() with R's random-number generator set to `state` (a saved
+# .Random.seed; NULL = leave it as is). Returns the value and the generator's
+# state afterwards, and restores the global generator, so a chunked run keeps
+# its own reproducible stream of random numbers.
+with_seed_state <- function(state, fun) {
+  genv <- globalenv()
+  had <- exists(".Random.seed", envir = genv, inherits = FALSE)
+  old <- if (had) get(".Random.seed", envir = genv)
+  on.exit({
+    if (had) assign(".Random.seed", old, envir = genv)
+    else if (exists(".Random.seed", envir = genv, inherits = FALSE))
+      rm(".Random.seed", envir = genv)
+  })
+  if (!is.null(state)) assign(".Random.seed", state, envir = genv)
+  value <- fun()
+  list(value = value, state = get(".Random.seed", envir = genv))
+}
+
+# "12 s" / "3.5 min"
+format_secs <- function(s) {
+  if (s < 60) paste0(max(1, round(s)), " s") else paste0(round(s / 60, 1), " min")
+}
