@@ -82,35 +82,47 @@ build_model <- function(p) {
   # -- display helpers --------------------------------------------------------------
   nat <- switch(fam, additive = identity, rd = function(x) 100 * x, ratio = exp)
   fmt_eff <- switch(fam,
-    additive = function(x) format(signif(x, 3), trim = TRUE),
-    rd       = function(x) paste0(formatC(100 * x, format = "f", digits = 1), " percentage points"),
-    ratio    = function(x) formatC(exp(x), format = "f", digits = 2))
+    additive = function(x) fmt_num(signif(x, 3)),
+    rd       = function(x) paste0(fmt_dec(100 * x, 1), L(" percentage points", " pontos percentuais")),
+    ratio    = function(x) fmt_dec(exp(x), 2))
 
   key <- if (otype == "binary") paste0("bin_", measure) else otype
   lab <- switch(key,
-    cont   = list(short = "difference in means", thing = "the outcome",
-                  axis = "True difference in means (treatment minus control)",
-                  type = "Continuous"),
-    ancova = list(short = "adjusted difference in means", thing = "the outcome",
-                  axis = "True baseline-adjusted difference in means",
-                  type = "Continuous, baseline-adjusted"),
-    bin_or = list(short = "odds ratio", thing = "the odds of the event",
-                  axis = "True odds ratio (treatment vs control, log scale)",
-                  type = "Binary, odds ratio"),
-    bin_rr = list(short = "risk ratio", thing = "the risk of the event",
-                  axis = "True risk ratio (treatment vs control, log scale)",
-                  type = "Binary, risk ratio"),
-    bin_rd = list(short = "risk difference", thing = "the risk of the event",
-                  axis = "True risk difference (percentage points)",
-                  type = "Binary, risk difference"),
-    surv   = list(short = "hazard ratio", thing = "the hazard (event rate)",
-                  axis = "True hazard ratio (treatment vs control, log scale)",
-                  type = "Time to event"))
+    cont   = list(short = LL("difference in means", "diferen\u00E7a de m\u00E9dias"),
+                  thing = LL("the outcome", "o desfecho"),
+                  axis  = LL("True difference in means (treatment minus control)",
+                             "Diferen\u00E7a de m\u00E9dias verdadeira (tratamento menos controle)"),
+                  type  = LL("Continuous", "Cont\u00EDnuo")),
+    ancova = list(short = LL("adjusted difference in means", "diferen\u00E7a de m\u00E9dias ajustada"),
+                  thing = LL("the outcome", "o desfecho"),
+                  axis  = LL("True baseline-adjusted difference in means",
+                             "Diferen\u00E7a de m\u00E9dias verdadeira, ajustada pelo valor basal"),
+                  type  = LL("Continuous, baseline-adjusted", "Cont\u00EDnuo, ajustado pelo basal")),
+    bin_or = list(short = LL("odds ratio", "raz\u00E3o de chances"),
+                  thing = LL("the odds of the event", "a chance (odds) do evento"),
+                  axis  = LL("True odds ratio (treatment vs control, log scale)",
+                             "Raz\u00E3o de chances verdadeira (tratamento vs controle, escala log)"),
+                  type  = LL("Binary, odds ratio", "Bin\u00E1rio, raz\u00E3o de chances")),
+    bin_rr = list(short = LL("risk ratio", "risco relativo"),
+                  thing = LL("the risk of the event", "o risco do evento"),
+                  axis  = LL("True risk ratio (treatment vs control, log scale)",
+                             "Risco relativo verdadeiro (tratamento vs controle, escala log)"),
+                  type  = LL("Binary, risk ratio", "Bin\u00E1rio, risco relativo")),
+    bin_rd = list(short = LL("risk difference", "diferen\u00E7a de riscos"),
+                  thing = LL("the risk of the event", "o risco do evento"),
+                  axis  = LL("True risk difference (percentage points)",
+                             "Diferen\u00E7a de riscos verdadeira (pontos percentuais)"),
+                  type  = LL("Binary, risk difference", "Bin\u00E1rio, diferen\u00E7a de riscos")),
+    surv   = list(short = LL("hazard ratio", "raz\u00E3o de riscos (HR)"),
+                  thing = LL("the hazard (event rate)", "o risco instant\u00E2neo (taxa de eventos)"),
+                  axis  = LL("True hazard ratio (treatment vs control, log scale)",
+                             "Raz\u00E3o de riscos verdadeira (tratamento vs controle, escala log)"),
+                  type  = LL("Time to event", "Tempo at\u00E9 o evento")))
 
   m <- list(key = key, otype = otype, measure = measure, family = fam,
             m_d = m_d, s_d = s_d, m_a = m_a, s_a = s_a, C = C,
             alt = p$alt, alpha = p$alpha, nat = nat, fmt_eff = fmt_eff,
-            labels = lab, log_axis = fam == "ratio", warnings = character(0),
+            labels = lab, log_axis = fam == "ratio", warnings = list(),
             events = NULL)
 
   # -- does the analysis prior alone already meet the success rule? -------------------
@@ -122,13 +134,21 @@ build_model <- function(p) {
   need_prob <- if (p$alt == "two.sided") 1 - p$alpha / 2 else 1 - p$alpha
   m$prior_only_success <- prior_prob > need_prob
   if (m$prior_only_success) {
-    m$warnings <- c(m$warnings, paste0(
-      "Your analysis prior on its own already meets the success rule: it gives a ",
-      fmt_pct(prior_prob), " probability to the tested effect, above the ",
-      fmt_pct(need_prob), " required. The analysis would declare success even ",
-      "with almost no data, so assurance and the sample-size finder are not ",
-      "meaningful. Use a sceptical or vaguer analysis prior (untick 'Analyse ",
-      "with the same prior')."))
+    m$warnings <- c(m$warnings, list(LL(
+      with_lang("en", paste0(
+        "Your analysis prior on its own already meets the success rule: it gives a ",
+        fmt_pct(prior_prob), " probability to the tested effect, above the ",
+        fmt_pct(need_prob), " required. The analysis would declare success even ",
+        "with almost no data, so assurance and the sample-size finder are not ",
+        "meaningful. Use a sceptical or vaguer analysis prior (untick 'Analyse ",
+        "with the same prior').")),
+      with_lang("pt", paste0(
+        "A sua priori de an\u00E1lise, sozinha, j\u00E1 satisfaz a regra de sucesso: ela d\u00E1 ",
+        fmt_pct(prior_prob), " de probabilidade ao efeito testado, acima dos ",
+        fmt_pct(need_prob), " exigidos. A an\u00E1lise declararia sucesso mesmo com ",
+        "quase nenhum dado, ent\u00E3o a assurance e o c\u00E1lculo do tamanho amostral ",
+        "perdem o sentido. Use uma priori de an\u00E1lise c\u00E9tica ou mais vaga (desmarque ",
+        "'Analisar com a mesma priori').")))))
   }
 
   # -- outcome-specific parts ---------------------------------------------------------
@@ -144,9 +164,10 @@ build_model <- function(p) {
     m$per_iter <- package_seconds_per_iter
     m$max_chunk <- function(n_t, n_c) Inf
     m$engine_label <- "bayesassurance::bayes_sim_unbalanced"
-    m$power_label <- "two-sample t-test"
-    m$describe <- paste0("Continuous, SD ", fmt_num(sigma))
-    m$nuisance <- list(label = "Outcome standard deviation",
+    m$power_label <- LL("two-sample t-test", "teste t para duas amostras")
+    m$describe <- LL(with_lang("en", paste0("Continuous, SD ", fmt_num(sigma))),
+                     with_lang("pt", paste0("Cont\u00EDnuo, DP ", fmt_num(sigma))))
+    m$nuisance <- list(label = LL("Outcome standard deviation", "Desvio padr\u00E3o do desfecho"),
                        values = seq(sigma / 2, sigma * 2, length.out = 40),
                        current = sigma, set = function(q, v) { q$sigma <- v; q })
 
@@ -164,10 +185,12 @@ build_model <- function(p) {
                     mm$alpha, mm$alt, mm$C, iters, ancova_rho = rho)
     m$per_iter <- package_seconds_per_iter
     m$max_chunk <- function(n_t, n_c) Inf
-    m$engine_label <- "bayesassurance::bayes_sim_unbalanced (with a simulated baseline covariate)"
-    m$power_label <- "ANCOVA t-test"
-    m$describe <- paste0("ANCOVA, SD ", fmt_num(sigma), ", rho ", fmt_num(rho))
-    m$nuisance <- list(label = "Baseline-outcome correlation (rho)",
+    m$engine_label <- LL("bayesassurance::bayes_sim_unbalanced (with a simulated baseline covariate)",
+                         "bayesassurance::bayes_sim_unbalanced (com uma covari\u00E1vel basal simulada)")
+    m$power_label <- LL("ANCOVA t-test", "teste t da ANCOVA")
+    m$describe <- LL(with_lang("en", paste0("ANCOVA, SD ", fmt_num(sigma), ", rho ", fmt_num(rho))),
+                     with_lang("pt", paste0("ANCOVA, DP ", fmt_num(sigma), ", rho ", fmt_num(rho))))
+    m$nuisance <- list(label = LL("Baseline-outcome correlation (rho)", "Correla\u00E7\u00E3o basal-desfecho (rho)"),
                        values = seq(0, 0.9, length.out = 40),
                        current = rho, set = function(q, v) { q$rho <- v; q })
 
@@ -209,13 +232,17 @@ build_model <- function(p) {
     }
     m$per_iter <- function(n_t, n_c) rep(3e-6, length(n_t))
     m$max_chunk <- function(n_t, n_c) Inf
-    m$engine_label <- "built-in simulation of binomial trial data"
-    m$power_label <- paste0("Wald z-test on the ", c(or = "log odds ratio",
-      rr = "log risk ratio", rd = "risk difference")[[measure]])
-    m$describe <- paste0("Binary (", toupper(measure), "), control ",
-                         fmt_num(100 * pc), "%")
+    m$engine_label <- LL("built-in simulation of binomial trial data",
+                         "simula\u00E7\u00E3o pr\u00F3pria de dados binomiais do ensaio")
+    m$power_label <- LL(paste0("Wald z-test on the ", c(or = "log odds ratio",
+                          rr = "log risk ratio", rd = "risk difference")[[measure]]),
+                        paste0("teste z de Wald ", c(or = "no log da raz\u00E3o de chances",
+                          rr = "no log do risco relativo", rd = "na diferen\u00E7a de riscos")[[measure]]))
+    m$describe <- LL(with_lang("en", paste0("Binary (", toupper(measure), "), control ", fmt_num(100 * pc), "%")),
+                     with_lang("pt", paste0("Bin\u00E1rio (", c(or = "OR", rr = "RR", rd = "DR")[[measure]],
+                                            "), controle ", fmt_num(100 * pc), "%")))
     lo <- max(1, 100 * pc / 2.5); hi <- min(99, 100 * pc * 2)
-    m$nuisance <- list(label = "Control-group event rate (%)",
+    m$nuisance <- list(label = LL("Control-group event rate (%)", "Taxa de eventos no grupo controle (%)"),
                        values = seq(lo, hi, length.out = 40),
                        current = 100 * pc,
                        set = function(q, v) { q$p_control <- v / 100; q })
@@ -226,10 +253,16 @@ build_model <- function(p) {
       rr = 1 - pnorm((log(0.999 / pc) - m_d) / s_d),
       rd = pnorm((0.001 - pc - m_d) / s_d) + 1 - pnorm((0.999 - pc - m_d) / s_d))
     if (beyond > 0.01) {
-      m$warnings <- c(m$warnings, paste0(
-        "About ", fmt_pct(beyond), " of your design prior implies a treatment-",
-        "group event rate outside 0-100%. Those values are truncated, which makes ",
-        "the results approximate. Consider a narrower prior or the odds ratio."))
+      m$warnings <- c(m$warnings, list(LL(
+        with_lang("en", paste0(
+          "About ", fmt_pct(beyond), " of your design prior implies a treatment-",
+          "group event rate outside 0-100%. Those values are truncated, which makes ",
+          "the results approximate. Consider a narrower prior or the odds ratio.")),
+        with_lang("pt", paste0(
+          "Cerca de ", fmt_pct(beyond), " da sua priori de planejamento implica uma taxa ",
+          "de eventos no grupo tratamento fora de 0-100%. Esses valores s\u00E3o truncados, ",
+          "o que torna os resultados aproximados. Considere uma priori mais estreita ou a ",
+          "raz\u00E3o de chances.")))))
     }
 
   } else if (otype == "surv") {
@@ -268,12 +301,16 @@ build_model <- function(p) {
     }
     m$per_iter <- function(n_t, n_c) 2e-6 + 3e-7 * (n_t + n_c)
     m$max_chunk <- function(n_t, n_c) pmax(10, floor(4e5 / (n_t + n_c)))
-    m$engine_label <- "built-in simulation of patient-level survival data"
-    m$power_label <- "Wald z-test on the log hazard ratio (exponential model)"
+    m$engine_label <- LL("built-in simulation of patient-level survival data",
+                         "simula\u00E7\u00E3o pr\u00F3pria de dados de sobrevida por paciente")
+    m$power_label <- LL("Wald z-test on the log hazard ratio (exponential model)",
+                        "teste z de Wald no log da raz\u00E3o de riscos (modelo exponencial)")
     tu <- if (nzchar(p$time_unit)) p$time_unit else "time units"
     m$time_unit <- tu
-    m$describe <- paste0("Survival, control median ", fmt_num(p$surv_median), " ", tu)
-    m$nuisance <- list(label = paste0("Control-group median survival (", tu, ")"),
+    m$describe <- LL(with_lang("en", paste0("Survival, control median ", fmt_num(p$surv_median), " ", tu)),
+                     with_lang("pt", paste0("Sobrevida, mediana no controle ", fmt_num(p$surv_median), " ", tu)))
+    m$nuisance <- list(label = LL(paste0("Control-group median survival (", tu, ")"),
+                                  paste0("Mediana de sobrevida no grupo controle (", tu, ")")),
                        values = seq(p$surv_median / 2, p$surv_median * 2, length.out = 40),
                        current = p$surv_median,
                        set = function(q, v) { q$surv_median <- v; q })
@@ -309,15 +346,18 @@ model_with_priors <- function(m, m_d = m$m_d, s_d = m$s_d, m_a = m$m_a,
 
 # Words used in the plain-language summary.
 model_goal <- function(m) {
+  thing <- tx(m$labels$thing); short <- tx(m$labels$short)
   if (m$alt == "two.sided") {
-    return(paste0("a difference between treatment and control in ", m$labels$thing))
+    return(L(paste0("a difference between treatment and control in ", thing),
+             paste0("uma diferen\u00E7a entre tratamento e controle n", sub("^(o|a) ", "\\1 ", thing))))
   }
   null_C <- abs(m$C) < 1e-12
   if (null_C) {
-    paste0("that treatment ", if (m$alt == "greater") "increases " else "reduces ",
-           m$labels$thing)
+    L(paste0("that treatment ", if (m$alt == "greater") "increases " else "reduces ", thing),
+      paste0("que o tratamento ", if (m$alt == "greater") "aumenta " else "reduz ", thing))
   } else {
-    paste0("that the ", m$labels$short, " is ",
-           if (m$alt == "greater") "above " else "below ", m$fmt_eff(m$C))
+    L(paste0("that the ", short, " is ", if (m$alt == "greater") "above " else "below ", m$fmt_eff(m$C)),
+      paste0("que o valor de ", short, " est\u00E1 ", if (m$alt == "greater") "acima de " else "abaixo de ",
+             m$fmt_eff(m$C)))
   }
 }

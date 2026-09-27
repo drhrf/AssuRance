@@ -25,6 +25,12 @@ the reasons given under [Method notes](#method-notes).
 
 ## Features
 
+- **English and Portuguese (Brazil).** A button in the top-right corner
+  switches the whole interface, including results, plots, tables, messages
+  and the downloadable report, with Portuguese number formats (decimal
+  comma). The choice is remembered, Portuguese-language browsers start in
+  Portuguese, and `?lang=pt` or `?lang=en` in the URL forces a language.
+
 - **Four outcome types:**
 
   | Outcome | Effect measure | Extra inputs |
@@ -170,14 +176,16 @@ live-app button reads the `APP_URL` constant at the bottom of the page.
 | `R/plots.R` | Plot builders (plotly for the screen, ggplot2 for PNG export) |
 | `R/methods_ui.R` | Content of the *Methods & help* tab |
 | `R/prompt_generator.R` | Builds the prompt for the LLM helper and reads its JSON answer |
+| `R/i18n.R` | English / Portuguese interface: translation helpers and the language toggle |
 | `tests/test_calculations.R` | Checks the `bayesassurance` simulation against the exact formula, power against `power.t.test`, and the chunked simulation |
 | `tests/test_models.R` | Checks simulation against exact assurance for every outcome type, plus the survival and binary building blocks |
 | `tests/test_prompt_generator.R` | Checks the prompt builder and the JSON answer parser |
+| `tests/test_i18n.R` | Checks that every text has a Portuguese version, number formats, and that all plots build in both languages |
 | `setup.R` | Installs the required packages |
 
 Run the tests from the project folder with `Rscript tests/test_calculations.R`
 (about a minute), `Rscript tests/test_models.R` (about 10 seconds) and
-`Rscript tests/test_prompt_generator.R` (instant).
+`Rscript tests/test_prompt_generator.R` and `Rscript tests/test_i18n.R` (both instant).
 
 ## Method notes
 

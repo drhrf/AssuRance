@@ -3,7 +3,7 @@
 # Takes about half a minute.
 
 suppressMessages(library(bayesassurance))
-for (f in c("R/calculations.R", "R/models.R", "R/summary_text.R")) source(f)
+for (f in c("R/i18n.R", "R/calculations.R", "R/models.R", "R/summary_text.R")) source(f)
 
 ok <- TRUE
 check <- function(desc, cond) {

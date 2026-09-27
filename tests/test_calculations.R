@@ -4,7 +4,7 @@
 # Outcome-type models are checked in tests/test_models.R.
 
 suppressMessages(library(bayesassurance))
-source("R/calculations.R")
+source("R/i18n.R"); source("R/calculations.R")
 
 ok <- TRUE
 check <- function(desc, cond) {

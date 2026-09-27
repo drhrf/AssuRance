@@ -10,6 +10,14 @@ COL_ANALYSIS <- "#2a9d8f"
 SCENARIO_COLS <- c("#1f5fa8", "#d1661a", "#2a9d8f", "#9b5de5", "#e63946",
                    "#6b6b6b", "#f4a261", "#264653")
 
+# Finishing touches shared by every plotly chart: number separators for the
+# current language (decimal comma in Portuguese) and a cleaner toolbar.
+plotly_finish <- function(fig) {
+  fig |>
+    plotly::layout(separators = L(".,", ",.")) |>
+    plotly::config(displaylogo = FALSE)
+}
+
 pct_axis <- function(title) {
   list(title = title, range = c(0, 1.02), tickformat = ".0%",
        zeroline = FALSE)
@@ -26,7 +34,8 @@ vline_shape <- function(x, color, dash = "dot") {
 }
 
 x_label <- function(ratio) {
-  if (ratio == 1) "Sample size per group" else "Control-group sample size"
+  if (ratio == 1) L("Sample size per group", "Tamanho amostral por grupo")
+  else L("Control-group sample size", "Tamanho amostral do grupo controle")
 }
 
 # ---- Main curve: assurance and power vs sample size -------------------------
@@ -34,7 +43,7 @@ plot_curve_plotly <- function(res) {
   tab <- res$table
   p <- res$p
   xl <- x_label(p$ratio)
-  hover_n <- paste0("n (T / C): ", tab$n_t, " / ", tab$n_c)
+  hover_n <- paste0(L("n (T / C): ", "n (T / C): "), tab$n_t, " / ", tab$n_c)
 
   fig <- plotly::plot_ly()
   if (p$engine == "sim") {
@@ -42,14 +51,14 @@ plot_curve_plotly <- function(res) {
       plotly::add_ribbons(
         x = tab$n_c, ymin = pmax(0, tab$assurance - 1.96 * tab$mc_se),
         ymax = pmin(1, tab$assurance + 1.96 * tab$mc_se),
-        name = "95% simulation band", fillcolor = "rgba(31,95,168,0.15)",
+        name = L("95% simulation band", "Faixa de simula\u00E7\u00E3o de 95%"), fillcolor = "rgba(31,95,168,0.15)",
         line = list(width = 0), hoverinfo = "skip")
   }
   fig <- fig |>
     plotly::add_trace(
       x = tab$n_c, y = tab$assurance, type = "scatter", mode = "lines+markers",
-      name = if (p$engine == "sim") "Bayesian assurance (simulated)"
-             else "Bayesian assurance (exact)",
+      name = if (p$engine == "sim") L("Bayesian assurance (simulated)", "Assurance bayesiana (simulada)")
+             else L("Bayesian assurance (exact)", "Assurance bayesiana (exata)"),
       line = list(color = COL_ASSUR, width = 3),
       marker = list(color = COL_ASSUR, size = 6),
       text = paste0(hover_n, "<br>Assurance: ", fmt_pct(tab$assurance)),
@@ -58,50 +67,52 @@ plot_curve_plotly <- function(res) {
     fig <- fig |>
       plotly::add_trace(
         x = tab$n_c, y = tab$exact, type = "scatter", mode = "lines",
-        name = "Assurance (exact check)",
+        name = L("Assurance (exact check)", "Assurance (verifica\u00E7\u00E3o exata)"),
         line = list(color = COL_ASSUR, width = 1.5, dash = "dot"),
-        text = paste0(hover_n, "<br>Exact assurance: ", fmt_pct(tab$exact)),
+        text = paste0(hover_n, L("<br>Exact assurance: ", "<br>Assurance exata: "), fmt_pct(tab$exact)),
         hoverinfo = "text")
   }
   fig <- fig |>
     plotly::add_trace(
       x = tab$n_c, y = tab$power, type = "scatter", mode = "lines+markers",
-      name = "Frequentist power",
+      name = L("Frequentist power", "Poder frequentista"),
       line = list(color = COL_POWER, width = 3, dash = "dash"),
       marker = list(color = COL_POWER, size = 6, symbol = "square"),
-      text = paste0(hover_n, "<br>Power: ", fmt_pct(tab$power)),
+      text = paste0(hover_n, L("<br>Power: ", "<br>Poder: "), fmt_pct(tab$power)),
       hoverinfo = "text")
 
   shapes <- list(hline_shape(p$target, "#333333"))
   annos <- list(list(x = 0, xref = "paper", y = p$target, yanchor = "bottom",
                      xanchor = "left", showarrow = FALSE,
-                     text = paste0("Target ", fmt_pct(p$target, 0)),
+                     text = paste0(L("Target ", "Meta "), fmt_pct(p$target, 0)),
                      font = list(size = 11, color = "#333333")))
   ceil <- res$metrics$ceiling
   if (ceil < 0.995) {
     shapes <- c(shapes, list(hline_shape(ceil, COL_PRIOR, "dashdot")))
     annos <- c(annos, list(list(
       x = 1, xref = "paper", y = ceil, yanchor = "top", xanchor = "right",
-      showarrow = FALSE, text = paste0("Assurance ceiling ", fmt_pct(ceil)),
+      showarrow = FALSE, text = paste0(L("Assurance ceiling ", "Teto da assurance "), fmt_pct(ceil)),
       font = list(size = 11, color = COL_PRIOR))))
   }
 
   fig |>
     plotly::layout(
       xaxis = list(title = xl, zeroline = FALSE),
-      yaxis = pct_axis("Probability of success"),
+      yaxis = pct_axis(L("Probability of success", "Probabilidade de sucesso")),
       shapes = shapes, annotations = annos,
       legend = list(orientation = "h", y = 1.12),
       hovermode = "x unified") |>
-    plotly::config(displaylogo = FALSE)
+    plotly_finish()
 }
 
 plot_curve_gg <- function(res) {
   tab <- res$table
   p <- res$p
+  lab_a <- L("Bayesian assurance", "Assurance bayesiana")
+  lab_p <- L("Frequentist power", "Poder frequentista")
   long <- rbind(
-    data.frame(n = tab$n_c, prob = tab$assurance, what = "Bayesian assurance"),
-    data.frame(n = tab$n_c, prob = tab$power, what = "Frequentist power"))
+    data.frame(n = tab$n_c, prob = tab$assurance, what = lab_a),
+    data.frame(n = tab$n_c, prob = tab$power, what = lab_p))
   g <- ggplot2::ggplot(long, ggplot2::aes(n, prob, colour = what,
                                           linetype = what))
   if (p$engine == "sim") {
@@ -114,15 +125,13 @@ plot_curve_gg <- function(res) {
                           colour = "grey30") +
     ggplot2::geom_line(linewidth = 1) +
     ggplot2::geom_point(size = 1.8) +
-    ggplot2::scale_colour_manual(values = c("Bayesian assurance" = COL_ASSUR,
-                                            "Frequentist power" = COL_POWER)) +
-    ggplot2::scale_linetype_manual(values = c("Bayesian assurance" = "solid",
-                                              "Frequentist power" = "dashed")) +
+    ggplot2::scale_colour_manual(values = setNames(c(COL_ASSUR, COL_POWER), c(lab_a, lab_p))) +
+    ggplot2::scale_linetype_manual(values = setNames(c("solid", "dashed"), c(lab_a, lab_p))) +
     ggplot2::scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2),
                                 labels = function(x) paste0(100 * x, "%")) +
-    ggplot2::labs(x = x_label(p$ratio), y = "Probability of success",
+    ggplot2::labs(x = x_label(p$ratio), y = L("Probability of success", "Probabilidade de sucesso"),
                   colour = NULL, linetype = NULL,
-                  caption = paste0("Dotted line: target ",
+                  caption = paste0(L("Dotted line: target ", "Linha pontilhada: meta "),
                                    fmt_pct(p$target, 0))) +
     ggplot2::theme_minimal(base_size = 13) +
     ggplot2::theme(legend.position = "top")
@@ -144,7 +153,7 @@ effect_grid <- function(m, len = 400, include_analysis = TRUE) {
 }
 
 # Plotly x-axis for the effect, on the natural scale (log axis for ratios).
-effect_axis <- function(m, title = m$labels$axis) {
+effect_axis <- function(m, title = tx(m$labels$axis)) {
   if (m$log_axis) list(title = title, type = "log", zeroline = FALSE)
   else list(title = title, zeroline = FALSE)
 }
@@ -177,29 +186,29 @@ plot_priors <- function(m) {
     plotly::add_trace(
       x = x, y = ifelse(reg, dd, 0), type = "scatter", mode = "none",
       fill = "tozeroy", fillcolor = "rgba(31,95,168,0.18)",
-      name = "Effects that count as success", hoverinfo = "skip") |>
+      name = L("Effects that count as success", "Efeitos que contam como sucesso"), hoverinfo = "skip") |>
     plotly::add_trace(
       x = x, y = dd, type = "scatter", mode = "lines",
-      name = "Design prior (your belief)",
+      name = L("Design prior (your belief)", "Priori de planejamento (sua cren\u00E7a)"),
       line = list(color = COL_ASSUR, width = 3),
-      hovertemplate = paste0("Effect ", eff_hover(m), "<extra></extra>"))
+      hovertemplate = paste0(L("Effect ", "Efeito "), eff_hover(m), "<extra></extra>"))
   if (!same) {
     fig <- fig |>
       plotly::add_trace(
         x = x, y = da, type = "scatter", mode = "lines",
-        name = "Analysis prior",
+        name = L("Analysis prior", "Priori de an\u00E1lise"),
         line = list(color = COL_ANALYSIS, width = 3, dash = "dash"),
-        hovertemplate = paste0("Effect ", eff_hover(m), "<extra></extra>"))
+        hovertemplate = paste0(L("Effect ", "Efeito "), eff_hover(m), "<extra></extra>"))
   }
   shapes <- list(vline_shape(m$nat(0), "#333333"))
   if (abs(m$C) > 1e-12) shapes <- c(shapes, list(vline_shape(m$nat(m$C), COL_POWER, "dash")))
   fig |>
     plotly::layout(
       xaxis = effect_axis(m),
-      yaxis = list(title = "Relative plausibility", rangemode = "tozero",
+      yaxis = list(title = L("Relative plausibility", "Plausibilidade relativa"), rangemode = "tozero",
                    showticklabels = FALSE),
       shapes = shapes, legend = list(orientation = "h", y = 1.12)) |>
-    plotly::config(displaylogo = FALSE)
+    plotly_finish()
 }
 
 # ---- Probability of success as a function of the true effect ----------------
@@ -217,37 +226,43 @@ plot_conditional <- function(m, n_c, ratio) {
       x = x, y = dens, type = "scatter", mode = "lines", fill = "tozeroy",
       fillcolor = "rgba(107,107,107,0.15)",
       line = list(color = "rgba(107,107,107,0.5)", width = 1),
-      name = "Design prior (scaled)", hoverinfo = "skip") |>
+      name = L("Design prior (scaled)", "Priori de planejamento (em escala)"), hoverinfo = "skip") |>
     plotly::add_trace(
       x = x, y = bayes, type = "scatter", mode = "lines",
-      name = "Bayesian analysis succeeds",
+      name = L("Bayesian analysis succeeds", "An\u00E1lise bayesiana tem sucesso"),
       line = list(color = COL_ASSUR, width = 3),
-      hovertemplate = paste0("True effect ", eff_hover(m),
-                             "<br>P(success) %{y:.1%}<extra>Bayesian</extra>")) |>
+      hovertemplate = paste0(L("True effect ", "Efeito verdadeiro "), eff_hover(m),
+                             L("<br>P(success) %{y:.1%}<extra>Bayesian</extra>",
+                               "<br>P(sucesso) %{y:.1%}<extra>Bayesiana</extra>"))) |>
     plotly::add_trace(
       x = x, y = freq, type = "scatter", mode = "lines",
-      name = "Frequentist test significant",
+      name = L("Frequentist test significant", "Teste frequentista significativo"),
       line = list(color = COL_POWER, width = 3, dash = "dash"),
-      hovertemplate = paste0("True effect ", eff_hover(m),
-                             "<br>Power %{y:.1%}<extra>Frequentist</extra>")) |>
+      hovertemplate = paste0(L("True effect ", "Efeito verdadeiro "), eff_hover(m),
+                             L("<br>Power %{y:.1%}<extra>Frequentist</extra>",
+                               "<br>Poder %{y:.1%}<extra>Frequentista</extra>"))) |>
     plotly::layout(
       xaxis = effect_axis(m),
-      yaxis = pct_axis("Probability of success"),
+      yaxis = pct_axis(L("Probability of success", "Probabilidade de sucesso")),
       shapes = list(vline_shape(m$nat(m$m_d), COL_PRIOR, "dash")),
       annotations = list(list(
         x = if (m$log_axis) log10(m$nat(m$m_d)) else m$nat(m$m_d),
         y = 1.02, yref = "y", showarrow = FALSE,
-        text = "design prior centre", font = list(size = 11, color = COL_PRIOR))),
+        text = L("design prior centre", "centro da priori de planejamento"), font = list(size = 11, color = COL_PRIOR))),
       legend = list(orientation = "h", y = 1.15)) |>
-    plotly::config(displaylogo = FALSE)
+    plotly_finish()
 }
 
 # ---- Sensitivity: design prior centre x SD ------------------------------------
-sd_label <- function(m, which = "Design") {
-  switch(m$family,
-    additive = paste(which, "prior SD"),
-    rd       = paste(which, "prior SD (percentage points)"),
-    ratio    = paste0(which, " prior SD (log ", m$labels$short, ")"))
+sd_label <- function(m, which = c("design", "analysis")) {
+  which <- match.arg(which)
+  en <- paste(if (which == "design") "Design" else "Analysis", "prior SD")
+  pt <- paste("DP da priori de", if (which == "design") "planejamento" else "an\u00e1lise")
+  suffix <- switch(m$family,
+    additive = c("", ""),
+    rd       = c(" (percentage points)", " (pontos percentuais)"),
+    ratio    = c(paste0(" (log ", tx(m$labels$short), ")"), paste0(" (log da ", tx(m$labels$short), ")")))
+  L(paste0(en, suffix[1]), paste0(pt, suffix[2]))
 }
 sd_display <- function(m, s) if (m$family == "rd") 100 * s else s
 
@@ -268,16 +283,18 @@ plot_sensitivity_heat <- function(m, n_c, ratio, same_prior, len = 41) {
     contours = list(start = 0, end = 1, size = 0.1, showlabels = TRUE,
                     labelfont = list(color = "white")),
     colorbar = list(title = "Assurance", tickformat = ".0%"),
-    hovertemplate = paste0("Prior centre ", eff_hover(m), "<br>SD %{y:.3g}",
+    hovertemplate = paste0(L("Prior centre ", "Centro da priori "), eff_hover(m),
+                           L("<br>SD %{y:.3g}", "<br>DP %{y:.3g}"),
                            "<br>Assurance %{z:.1%}<extra></extra>")) |>
     plotly::add_markers(
       x = m$nat(m$m_d), y = sd_display(m, m$s_d), inherit = FALSE,
       marker = list(color = COL_POWER, size = 12, symbol = "x"),
-      name = "Your inputs", hoverinfo = "name") |>
-    plotly::layout(xaxis = effect_axis(m, paste0("Design prior centre (", m$labels$short, ")")),
-                   yaxis = list(title = sd_label(m)),
+      name = L("Your inputs", "Suas entradas"), hoverinfo = "name") |>
+    plotly::layout(xaxis = effect_axis(m, L(paste0("Design prior centre (", tx(m$labels$short), ")"),
+                                            paste0("Centro da priori de planejamento (", tx(m$labels$short), ")"))),
+                   yaxis = list(title = sd_label(m, "design")),
                    showlegend = FALSE) |>
-    plotly::config(displaylogo = FALSE)
+    plotly_finish()
 }
 
 plot_sensitivity_analysis_sd <- function(m, n_c, ratio) {
@@ -288,27 +305,29 @@ plot_sensitivity_analysis_sd <- function(m, n_c, ratio) {
   fig <- plotly::plot_ly() |>
     plotly::add_trace(
       x = sd_display(m, sds), y = y_cur, type = "scatter", mode = "lines",
-      name = paste0("Analysis prior centred at ", m$fmt_eff(m$m_a)),
+      name = paste0(L("Analysis prior centred at ", "Priori de an\u00E1lise centrada em "), m$fmt_eff(m$m_a)),
       line = list(color = COL_ASSUR, width = 3),
-      hovertemplate = "Analysis SD %{x:.3g}<br>Assurance %{y:.1%}<extra></extra>")
+      hovertemplate = L("Analysis SD %{x:.3g}<br>Assurance %{y:.1%}<extra></extra>",
+                        "DP de an\u00E1lise %{x:.3g}<br>Assurance %{y:.1%}<extra></extra>"))
   if (abs(m$m_a) > 1e-12) {
     y_zero <- vapply(sds, function(s)
       model_exact(model_with_priors(m, m_a = 0, s_a = s), n_t, n_c), 0)
     fig <- fig |>
       plotly::add_trace(
         x = sd_display(m, sds), y = y_zero, type = "scatter", mode = "lines",
-        name = "Sceptical analysis prior (centred on no effect)",
+        name = L("Sceptical analysis prior (centred on no effect)", "Priori de an\u00E1lise c\u00E9tica (centrada no efeito nulo)"),
         line = list(color = COL_ANALYSIS, width = 3, dash = "dash"),
-        hovertemplate = "Analysis SD %{x:.3g}<br>Assurance %{y:.1%}<extra></extra>")
+        hovertemplate = L("Analysis SD %{x:.3g}<br>Assurance %{y:.1%}<extra></extra>",
+                        "DP de an\u00E1lise %{x:.3g}<br>Assurance %{y:.1%}<extra></extra>"))
   }
   fig |>
     plotly::layout(
-      xaxis = list(title = paste(sd_label(m, "Analysis"), "- log axis; right = vaguer"),
+      xaxis = list(title = paste(sd_label(m, "analysis"), L("- log axis; right = vaguer", "- eixo log; \u00E0 direita = mais vaga")),
                    type = "log"),
       yaxis = pct_axis("Assurance"),
       shapes = list(vline_shape(sd_display(m, m$s_a), COL_PRIOR, "dash")),
       legend = list(orientation = "h", y = 1.15)) |>
-    plotly::config(displaylogo = FALSE)
+    plotly_finish()
 }
 
 # ---- Sensitivity to the outcome-specific ("nuisance") assumption ------------------
@@ -324,18 +343,18 @@ plot_sensitivity_nuisance <- function(p, m, n_c) {
   plotly::plot_ly() |>
     plotly::add_trace(
       x = vals, y = res[, 1], type = "scatter", mode = "lines",
-      name = "Bayesian assurance", line = list(color = COL_ASSUR, width = 3),
+      name = L("Bayesian assurance", "Assurance bayesiana"), line = list(color = COL_ASSUR, width = 3),
       hovertemplate = "%{x:.3g}<br>Assurance %{y:.1%}<extra></extra>") |>
     plotly::add_trace(
       x = vals, y = res[, 2], type = "scatter", mode = "lines",
-      name = "Frequentist power", line = list(color = COL_POWER, width = 3, dash = "dash"),
-      hovertemplate = "%{x:.3g}<br>Power %{y:.1%}<extra></extra>") |>
+      name = L("Frequentist power", "Poder frequentista"), line = list(color = COL_POWER, width = 3, dash = "dash"),
+      hovertemplate = L("%{x:.3g}<br>Power %{y:.1%}<extra></extra>", "%{x:.3g}<br>Poder %{y:.1%}<extra></extra>")) |>
     plotly::layout(
-      xaxis = list(title = nu$label, zeroline = FALSE),
-      yaxis = pct_axis("Probability of success"),
+      xaxis = list(title = tx(nu$label), zeroline = FALSE),
+      yaxis = pct_axis(L("Probability of success", "Probabilidade de sucesso")),
       shapes = list(vline_shape(nu$current, COL_PRIOR, "dash")),
       legend = list(orientation = "h", y = 1.15)) |>
-    plotly::config(displaylogo = FALSE)
+    plotly_finish()
 }
 
 # ---- Scenario comparison ------------------------------------------------------
@@ -355,17 +374,17 @@ plot_scenarios <- function(scenarios, show_power, x_total) {
       fig <- fig |>
         plotly::add_trace(
           x = x, y = s$table$power, type = "scatter", mode = "lines",
-          name = paste0(s$label, ": power"),
+          name = paste0(s$label, L(": power", ": poder")),
           line = list(color = col, width = 2, dash = "dash"),
           hovertemplate = "%{y:.1%}")
     }
   }
   fig |>
     plotly::layout(
-      xaxis = list(title = if (x_total) "Total sample size (both groups)"
-                           else "Control-group (or per-group) sample size"),
-      yaxis = pct_axis("Probability of success"),
+      xaxis = list(title = if (x_total) L("Total sample size (both groups)", "Tamanho amostral total (dois grupos)")
+                           else L("Control-group (or per-group) sample size", "Tamanho amostral do controle (ou por grupo)")),
+      yaxis = pct_axis(L("Probability of success", "Probabilidade de sucesso")),
       legend = list(orientation = "h", y = -0.2),
       hovermode = "x unified") |>
-    plotly::config(displaylogo = FALSE)
+    plotly_finish()
 }

@@ -1,7 +1,7 @@
 # Checks for R/prompt_generator.R. Run from the project root:
 #   Rscript tests/test_prompt_generator.R
 
-source("R/prompt_generator.R")
+source("R/i18n.R"); source("R/prompt_generator.R")
 
 ok <- TRUE
 check <- function(desc, cond) {

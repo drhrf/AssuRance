@@ -86,13 +86,35 @@ LLM_FIELDS <- list(
                           desc = "target probability of success, 0.5-0.99 (e.g. 0.8 or 0.9)")
 )
 
+# Portuguese labels for the table shown after applying an answer.
+LLM_LABELS_PT <- c(
+  otype = "Tipo de desfecho", measure = "Medida de efeito", sigma = "DP do desfecho",
+  rho = "Correla\u00E7\u00E3o basal-desfecho", p_control = "Taxa de eventos no controle (%)",
+  surv_median = "Mediana no controle", time_unit = "Unidade de tempo", accrual = "Per\u00EDodo de recrutamento",
+  followup = "Seguimento adicional", loss_pct = "Perda de seguimento (%)",
+  design_mean = "M\u00E9dia da priori de planejamento", design_sd = "DP da priori de planejamento",
+  analysis_mean = "M\u00E9dia da priori de an\u00E1lise", analysis_sd = "DP da priori de an\u00E1lise",
+  rd_design_mean = "M\u00E9dia da priori de planejamento (pontos)", rd_design_sd = "DP da priori de planejamento (pontos)",
+  rd_analysis_mean = "M\u00E9dia da priori de an\u00E1lise (pontos)", rd_analysis_sd = "DP da priori de an\u00E1lise (pontos)",
+  ratio_design_lo = "Priori de planejamento: intervalo de 95% de", ratio_design_hi = "Priori de planejamento: intervalo de 95% at\u00E9",
+  ratio_analysis_lo = "Priori de an\u00E1lise: intervalo de 95% de", ratio_analysis_hi = "Priori de an\u00E1lise: intervalo de 95% at\u00E9",
+  same_prior = "Analisar com a mesma priori", n_min = "n m\u00EDnimo", n_max = "n m\u00E1ximo", n_step = "Passo",
+  ratio = "Raz\u00E3o de aloca\u00E7\u00E3o", dropout_percent = "Abandono (%)", alt = "Dire\u00E7\u00E3o do teste",
+  threshold = "Limiar de sucesso", rd_threshold = "Limiar de sucesso (pontos)", ratio_threshold = "Limiar de sucesso (raz\u00E3o)",
+  alpha = "Alfa", target = "Meta")
+for (k in names(LLM_LABELS_PT)) LLM_FIELDS[[k]]$label_pt <- LLM_LABELS_PT[[k]]
+
 outcome_type_label <- function(otype, measure = NULL) {
   switch(otype %||% "cont",
-    cont   = "continuous outcome, difference in means",
-    ancova = "continuous outcome analysed with adjustment for its baseline value (ANCOVA)",
-    binary = paste0("binary outcome, ", c(or = "odds ratio", rr = "risk ratio",
-                                          rd = "risk difference")[[measure %||% "or"]]),
-    surv   = "time-to-event (survival) outcome, hazard ratio")
+    cont   = L("continuous outcome, difference in means", "desfecho cont\u00EDnuo, diferen\u00E7a de m\u00E9dias"),
+    ancova = L("continuous outcome analysed with adjustment for its baseline value (ANCOVA)",
+               "desfecho cont\u00EDnuo analisado com ajuste pelo valor basal (ANCOVA)"),
+    binary = L(paste0("binary outcome, ", c(or = "odds ratio", rr = "risk ratio",
+                                            rd = "risk difference")[[measure %||% "or"]]),
+               paste0("desfecho bin\u00E1rio, ", c(or = "raz\u00E3o de chances", rr = "risco relativo",
+                                                  rd = "diferen\u00E7a de riscos")[[measure %||% "or"]])),
+    surv   = L("time-to-event (survival) outcome, hazard ratio",
+               "desfecho de tempo at\u00E9 o evento (sobrevida), raz\u00E3o de riscos"))
 }
 
 # JSON keys that apply to an outcome type (in LLM_FIELDS order).
@@ -197,7 +219,7 @@ build_llm_prompt <- function(info, current = NULL, otype = "cont", measure = "or
   paste(c(
     "# Task",
     paste0("You are an experienced biostatistician and clinical trial methodologist. Help me choose evidence-based input values for a Bayesian assurance (probability of success) calculation for a planned two-arm randomised trial. The primary outcome is a ",
-           outcome_type_label(otype, measure),
+           with_lang("en", outcome_type_label(otype, measure)),
            ". The calculation tool (the \"AssuRance\" app) compares Bayesian assurance with frequentist power."),
     "",
     "## My project",
@@ -245,7 +267,7 @@ to_json_block <- function(values) {
 parse_llm_values <- function(text) {
   msgs <- character(0)
   if (is.null(text) || !nzchar(trimws(text))) {
-    return(list(values = list(), messages = "Nothing was pasted."))
+    return(list(values = list(), messages = L("Nothing was pasted.", "Nada foi colado.")))
   }
 
   # Prefer the last ```json fenced block; otherwise the outermost { ... }.
@@ -255,7 +277,8 @@ parse_llm_values <- function(text) {
   } else {
     start <- regexpr("\\{", text); ends <- gregexpr("\\}", text)[[1]]
     if (start < 0 || ends[1] < 0) {
-      return(list(values = list(), messages = "No JSON object was found in the pasted text."))
+      return(list(values = list(), messages = L("No JSON object was found in the pasted text.",
+                                                "Nenhum objeto JSON foi encontrado no texto colado.")))
     }
     substr(text, start, max(ends))
   }
@@ -264,7 +287,8 @@ parse_llm_values <- function(text) {
                   error = function(e) NULL)
   if (!is.list(raw) || is.null(names(raw))) {
     return(list(values = list(),
-                messages = "The JSON could not be read. Check that it is a single object like {\"sigma\": 10, ...}."))
+                messages = L("The JSON could not be read. Check that it is a single object like {\"sigma\": 10, ...}.",
+                             "N\u00E3o foi poss\u00EDvel ler o JSON. Verifique se \u00E9 um \u00FAnico objeto como {\"sigma\": 10, ...}.")))
   }
   # backwards compatibility with the earlier `margin` key (continuous only)
   if (!is.null(raw$margin) && is.null(raw$threshold)) {
@@ -275,7 +299,8 @@ parse_llm_values <- function(text) {
   }
 
   unknown <- setdiff(names(raw), names(LLM_FIELDS))
-  if (length(unknown)) msgs <- c(msgs, paste0("Ignored unknown field(s): ", paste(unknown, collapse = ", "), "."))
+  if (length(unknown)) msgs <- c(msgs, paste0(L("Ignored unknown field(s): ", "Campo(s) desconhecido(s) ignorado(s): "),
+                                              paste(unknown, collapse = ", "), "."))
 
   out <- list()
   for (k in intersect(names(LLM_FIELDS), names(raw))) {
@@ -316,17 +341,19 @@ parse_llm_values <- function(text) {
         target   = v >= 0.5 && v <= 0.99)
     }
     if (isTRUE(ok)) out[[k]] <- v
-    else msgs <- c(msgs, paste0("Skipped `", k, "`: invalid value."))
+    else msgs <- c(msgs, paste0(L("Skipped `", "Ignorado `"), k, L("`: invalid value.", "`: valor inv\u00E1lido.")))
   }
   if (!is.null(out$n_min) && !is.null(out$n_max) && out$n_max <= out$n_min) {
-    msgs <- c(msgs, "Skipped the sample-size range: n_max must exceed n_min.")
+    msgs <- c(msgs, L("Skipped the sample-size range: n_max must exceed n_min.",
+                      "Faixa de tamanhos amostrais ignorada: n_max deve ser maior que n_min."))
     out$n_min <- NULL; out$n_max <- NULL
   }
   for (pair in list(c("ratio_design_lo", "ratio_design_hi"),
                     c("ratio_analysis_lo", "ratio_analysis_hi"))) {
     if (!is.null(out[[pair[1]]]) && !is.null(out[[pair[2]]]) &&
         out[[pair[2]]] <= out[[pair[1]]]) {
-      msgs <- c(msgs, paste0("Skipped `", pair[1], "`/`", pair[2], "`: the upper end must exceed the lower end."))
+      msgs <- c(msgs, paste0(L("Skipped `", "Ignorados `"), pair[1], "`/`", pair[2],
+                             L("`: the upper end must exceed the lower end.", "`: o limite superior deve ser maior que o inferior.")))
       out[[pair[1]]] <- NULL; out[[pair[2]]] <- NULL
     }
   }
