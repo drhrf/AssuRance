@@ -99,6 +99,12 @@ build_summary <- function(res) {
            "sobre toda a faixa de tamanhos de efeito que voc\u00EA considera plaus\u00EDveis, ",
            "em vez de apostar em um \u00FAnico valor.")))
 
+  # 1b. Detection if the effect is real (the Detectability headline) --------
+  if (!is.null(res$det)) {
+    d <- res$det[nrow(res$det), ]
+    out <- c(out, detect_headline(d, m))
+  }
+
   # 2. Frequentist power at the same sample size ----------------------------
   out <- c(out, L(
     paste0("By contrast, under a traditional frequentist framework that assumes the ",
@@ -260,4 +266,80 @@ describe_inputs <- function(p, m) {
       paste0(tx(m$engine_label), ", ", p$mc_iter, L(" trials per n, seed ", " ensaios por n, semente "), p$seed)
       else L("exact formula", "f\u00F3rmula exata")),
     paste0("  ", pad(L("Power", "Poder")), tx(m$power_label)))
+}
+
+
+# ---- Detectability text ------------------------------------------------------------
+# d: one row of detectability() (or detectability_one()); m: the model.
+detect_headline <- function(d, m) {
+  short <- tx(m$labels$short)
+  if (m$alt == "two.sided") {
+    L(paste0("If there is a true effect, this design would detect it in the correct direction with a ",
+             "probability of ", fmt_pct(d$detect), " (detection if real). This number separates the two ",
+             "reasons a trial can fail: being too small to see a real effect, and the effect not being there."),
+      paste0("Se houver um efeito verdadeiro, este desenho o detectaria na dire\u00e7\u00e3o correta com ",
+             "probabilidade de ", fmt_pct(d$detect), " (detec\u00e7\u00e3o se real). Esse n\u00famero separa os dois ",
+             "motivos pelos quais um ensaio pode falhar: ser pequeno demais para ver um efeito real, e o efeito n\u00e3o existir."))
+  } else {
+    L(paste0("If the treatment truly works, meaning the true ", short, " is beyond the success threshold (",
+             m$fmt_eff(m$C), "; a ", fmt_pct(d$p_real), " chance under your design prior), this design would ",
+             "detect it with a probability of ", fmt_pct(d$detect), " (detection if real). This number separates ",
+             "the two reasons a trial can fail: being too small to see a real effect, and the treatment not ",
+             "working as hoped."),
+      paste0("Se o tratamento realmente funcionar, isto \u00e9, se o valor verdadeiro (", short, ") estiver al\u00e9m ",
+             "do limiar de sucesso (", m$fmt_eff(m$C), "; ", fmt_pct(d$p_real), " de chance segundo a sua priori ",
+             "de planejamento), este desenho o detectaria com probabilidade de ", fmt_pct(d$detect),
+             " (detec\u00e7\u00e3o se real). Esse n\u00famero separa os dois motivos pelos quais um ensaio pode falhar: ",
+             "ser pequeno demais para ver um efeito real, e o tratamento n\u00e3o funcionar como esperado."))
+  }
+}
+
+# Paragraphs for the Detectability tab at the chosen sample size.
+detect_paragraphs <- function(d, m, p, n_detect) {
+  out <- paste0(L("At ", "Com "), describe_arms(d$n_t, d$n_c), ": ", detect_headline(d, m))
+  tgt <- fmt_pct(p$target, 0)
+  out <- c(out, if (is.na(n_detect)) {
+    L(paste0("A detection rate of ", tgt, " is not reached below 20,000 per group."),
+      paste0("Uma taxa de detec\u00e7\u00e3o de ", tgt, " n\u00e3o \u00e9 atingida abaixo de ", fmt_num(20000), " por grupo."))
+  } else {
+    L(paste0("To detect a real effect with ", tgt, " probability you would need about ",
+             describe_arms(treatment_n(n_detect, p$ratio), n_detect), "."),
+      paste0("Para detectar um efeito real com ", tgt, " de probabilidade, voc\u00ea precisaria de cerca de ",
+             describe_arms(treatment_n(n_detect, p$ratio), n_detect), "."))
+  })
+  ent <- if (d$h_outcome > 0.9) L("close to a coin flip", "perto de cara ou coroa")
+         else if (d$h_outcome > 0.5) L("still fairly unpredictable", "ainda bastante imprevis\u00edvel")
+         else L("fairly predictable", "razoavelmente previs\u00edvel")
+  out <- c(out, L(
+    paste0("The trial's result is ", ent, " (outcome entropy ", fmt_dec(d$h_outcome, 2), " bits). ",
+           "It is expected to remove ", fmt_pct(d$var_removed, 0), " of your uncertainty about the size of ",
+           "the effect", if (!is.na(d$mi_share)) paste0(", and ", fmt_pct(d$mi_share, 0),
+           if (m$alt == "two.sided") " of your doubt about the effect's direction"
+           else " of your doubt about whether the effect is real") else "", "."),
+    paste0("O resultado do ensaio est\u00e1 ", ent, " (entropia do resultado ", fmt_dec(d$h_outcome, 2), " bits). ",
+           "Espera-se que ele remova ", fmt_pct(d$var_removed, 0), " da sua incerteza sobre o tamanho do efeito",
+           if (!is.na(d$mi_share)) paste0(", e ", fmt_pct(d$mi_share, 0),
+           if (m$alt == "two.sided") " da sua d\u00FAvida sobre a dire\u00E7\u00E3o do efeito"
+           else " da sua d\u00favida sobre o efeito ser real") else "", ".")))
+  out
+}
+
+# Report lines for one row of detectability().
+describe_detectability <- function(d, m) {
+  pad <- function(label) formatC(paste0(label, ":"), width = -38)
+  two <- m$alt == "two.sided"
+  c(paste0("  ", pad(L("Detection if real", "Detec\u00e7\u00e3o se real")), fmt_pct(d$detect)),
+    paste0("  ", pad(L("Real effect detected", "Efeito real detectado")), fmt_pct(d$detected)),
+    paste0("  ", pad(L("Real effect missed", "Efeito real n\u00e3o detectado")), fmt_pct(d$missed)),
+    if (two) paste0("  ", pad(L("Success in the wrong direction", "Sucesso na dire\u00e7\u00e3o errada")), fmt_pct(d$wrong_dir, 2))
+    else c(paste0("  ", pad(L("Success without a real effect", "Sucesso sem efeito real")), fmt_pct(d$false_success, 2)),
+           paste0("  ", pad(L("No real effect, trial negative", "Sem efeito real, ensaio negativo")), fmt_pct(d$correct_no))),
+    paste0("  ", pad(L("Outcome entropy", "Entropia do resultado")), fmt_dec(d$h_outcome, 2), " bits"),
+    paste0("  ", pad(if (two) L("Information: effect's direction", "Informa\u00E7\u00E3o: dire\u00E7\u00E3o do efeito")
+                     else L("Information: is the effect real?", "Informa\u00e7\u00e3o: o efeito \u00e9 real?")),
+           fmt_dec(d$mi_truth, 3), " bits",
+           if (!is.na(d$mi_share)) paste0(" (", fmt_pct(d$mi_share, 0), L(" of the doubt", " da d\u00favida"), ")") else ""),
+    paste0("  ", pad(L("Information: effect size", "Informa\u00e7\u00e3o: tamanho do efeito")),
+           fmt_dec(d$mi_theta, 2), " bits (", fmt_pct(d$var_removed, 0),
+           L(" of uncertainty removed)", " da incerteza removida)")))
 }

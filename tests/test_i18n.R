@@ -91,7 +91,11 @@ builders <- list(
   heat = function() plot_sensitivity_heat(mm, 200, 1, FALSE, len = 5),
   analysis_sd = function() plot_sensitivity_analysis_sd(mm, 200, 1),
   nuisance = function() plot_sensitivity_nuisance(pp, mm, 200),
-  scenarios = function() plot_scenarios(list(list(label = "A", table = rr$table)), TRUE, TRUE))
+  scenarios = function() plot_scenarios(list(list(label = "A", table = rr$table)), TRUE, TRUE),
+  detect_curves = function() plot_detect_curves(detectability(mm, pp$n_t, pp$n_c), 1, 0.8),
+  entropy_curves = function() plot_entropy_curves(detectability(mm, pp$n_t, pp$n_c), 1),
+  outcome_bar = function() plot_outcome_bar(detectability_one(mm, 200, 200), FALSE),
+  outcome_bar_2s = function() plot_outcome_bar(detectability_one(build_model(modifyList(pp, list(alt = "two.sided"))), 200, 200), TRUE))
 for (lg in c("en", "pt")) {
   okb <- vapply(builders, function(f) !inherits(tryCatch(with_lang(lg, plotly::plotly_build(f())),
                                                            error = function(e) e), "error"), logical(1))

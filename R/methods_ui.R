@@ -95,6 +95,19 @@ methods_ui <- function() {
       tags$li(tt(tagList(strong("Assurance ceiling."), " As the sample size grows, the data overwhelm the analysis prior and the trial succeeds exactly when the true effect lies beyond the success threshold. Assurance therefore cannot exceed the design-prior probability of that event. If your target is above this ceiling, no sample size can reach it."),
                  tagList(strong("Teto da assurance."), " \u00c0 medida que o tamanho amostral cresce, os dados superam a priori de an\u00e1lise e o ensaio tem sucesso exatamente quando o efeito verdadeiro est\u00e1 al\u00e9m do limiar de sucesso. Por isso a assurance n\u00e3o pode passar da probabilidade desse evento segundo a priori de planejamento. Se a sua meta estiver acima desse teto, nenhum tamanho amostral a atinge.")))),
 
+    h3_2("Detectability", "Detectabilidade"),
+    tp("The Detectability tab asks how easily the trial would detect a true effect, where a true effect is one beyond the success threshold (for two-sided tests, an effect in either direction, which must be detected in the right direction). All measures average over the design prior with the exact engine.",
+       "A aba Detectabilidade pergunta com que facilidade o ensaio detectaria um efeito verdadeiro, sendo verdadeiro um efeito al\u00e9m do limiar de sucesso (em testes bilaterais, um efeito em qualquer dire\u00e7\u00e3o, que precisa ser detectado na dire\u00e7\u00e3o certa). Todas as medidas fazem a m\u00e9dia sobre a priori de planejamento com o c\u00e1lculo exato."),
+    tags$ul(
+      li2("Detection if real: \\(P(\\text{success} \\mid \\theta \\text{ beyond } C)\\), also called expected power (Kunzmann et al., 2021). Assurance equals this times \\(P(\\theta \\text{ beyond } C)\\), plus the (usually tiny) chance of success without a real effect, so detection if real removes the part of the risk that no sample size can fix.",
+          "Detec\u00e7\u00e3o se real: \\(P(\\text{sucesso} \\mid \\theta \\text{ al\u00e9m de } C)\\), tamb\u00e9m chamada de poder esperado (Kunzmann et al., 2021). A assurance \u00e9 isso vezes \\(P(\\theta \\text{ al\u00e9m de } C)\\), mais a chance (em geral m\u00ednima) de sucesso sem efeito real; assim, a detec\u00e7\u00e3o se real remove a parte do risco que nenhum tamanho amostral resolve."),
+      li2("Outcome entropy: the Shannon entropy of the trial's result, \\(-A\\log_2 A - (1-A)\\log_2(1-A)\\) with \\(A\\) = assurance (1 bit = a coin flip).",
+          "Entropia do resultado: a entropia de Shannon do resultado do ensaio, \\(-A\\log_2 A - (1-A)\\log_2(1-A)\\), com \\(A\\) = assurance (1 bit = cara ou coroa)."),
+      li2("Information about whether the effect is real: the Shannon mutual information between the truth (effect beyond the threshold or not; for two-sided tests, its direction) and the trial's result, also shown as a share of the prior entropy of the truth.",
+          "Informa\u00e7\u00e3o sobre o efeito ser real: a informa\u00e7\u00e3o m\u00fatua de Shannon entre a verdade (efeito al\u00e9m do limiar ou n\u00e3o; em testes bilaterais, a sua dire\u00e7\u00e3o) e o resultado do ensaio, tamb\u00e9m mostrada como propor\u00e7\u00e3o da entropia pr\u00e9via da verdade."),
+      li2("Information about the effect's size: \\(\\tfrac12 \\log_2(1 + s_d^2/\\bar v)\\) bits, and the share of uncertainty removed \\(s_d^2/(s_d^2 + \\bar v)\\), where \\(\\bar v\\) is the variance of the estimate averaged over the design prior.",
+          "Informa\u00e7\u00e3o sobre o tamanho do efeito: \\(\\tfrac12 \\log_2(1 + s_d^2/\\bar v)\\) bits, e a propor\u00e7\u00e3o de incerteza removida \\(s_d^2/(s_d^2 + \\bar v)\\), em que \\(\\bar v\\) \u00e9 a vari\u00e2ncia da estimativa em m\u00e9dia sobre a priori de planejamento.")),
+
     h3_2("About the bayesassurance package", "Sobre o pacote bayesassurance"),
     tp("The app uses the package's general linear-model simulator bayes_sim_unbalanced() for continuous outcomes. Several other functions were reviewed and deliberately not used:",
        "O aplicativo usa o simulador de modelo linear geral do pacote, bayes_sim_unbalanced(), para desfechos cont\u00ednuos. Outras fun\u00e7\u00f5es foram analisadas e deliberadamente n\u00e3o usadas:"),
@@ -141,6 +154,9 @@ methods_ui <- function() {
               em("Journal of Clinical Epidemiology"), "60(12):1234-1238."),
       tags$li("Wang F, Gelfand AE (2002). A simulation-based approach to Bayesian sample size determination for performance under a given model and for separating models.",
               em("Statistical Science"), "17(2):193-208."),
+      tags$li("Kunzmann K, Grayling MJ, Lee KM, Robertson DS, Rufibach K, Wason JMS (2021). A review of Bayesian perspectives on sample size derivation for confirmatory trials.",
+              em("The American Statistician"), "75(4):424-432."),
+      tags$li("Shannon CE (1948). A mathematical theory of communication.", em("Bell System Technical Journal"), "27:379-423."),
       tags$li("Pan J, Banerjee S (2023). bayesassurance: An R package for calculating sample size and Bayesian assurance.",
               em("The R Journal"),
               tags$a(href = "https://journal.r-project.org/articles/RJ-2023-066/", target = "_blank", "RJ-2023-066")))

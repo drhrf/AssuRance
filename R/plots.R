@@ -388,3 +388,94 @@ plot_scenarios <- function(scenarios, show_power, x_total) {
       hovermode = "x unified") |>
     plotly_finish()
 }
+
+# ---- Detectability ------------------------------------------------------------
+COL_DETECT <- "#2a9d8f"
+COL_INFO   <- "#9b5de5"
+
+# Probabilities against sample size: detection if real, assurance, and the
+# share of uncertainty the trial removes.
+plot_detect_curves <- function(det, ratio, target, two_sided = FALSE) {
+  x <- det$n_c
+  fig <- plotly::plot_ly() |>
+    plotly::add_trace(x = x, y = det$detect, type = "scatter", mode = "lines+markers",
+      name = L("Detection if the effect is real", "Detec\u00E7\u00E3o se o efeito for real"),
+      line = list(color = COL_DETECT, width = 3), marker = list(color = COL_DETECT, size = 6),
+      hovertemplate = "%{y:.1%}<extra></extra>") |>
+    plotly::add_trace(x = x, y = det$assurance, type = "scatter", mode = "lines",
+      name = L("Assurance (any success)", "Assurance (qualquer sucesso)"),
+      line = list(color = COL_ASSUR, width = 2, dash = "dot"),
+      hovertemplate = "%{y:.1%}<extra></extra>") |>
+    plotly::add_trace(x = x, y = det$var_removed, type = "scatter", mode = "lines",
+      name = L("Uncertainty about the effect's size removed", "Incerteza sobre o tamanho do efeito removida"),
+      line = list(color = COL_PRIOR, width = 2, dash = "dash"),
+      hovertemplate = "%{y:.0%}<extra></extra>")
+  if (!all(is.na(det$mi_share))) {
+    fig <- fig |> plotly::add_trace(x = x, y = det$mi_share, type = "scatter", mode = "lines",
+      name = if (two_sided) L("Doubt about the effect's direction, resolved", "D\u00FAvida sobre a dire\u00E7\u00E3o do efeito, resolvida")
+             else L("Doubt about whether the effect is real, resolved", "D\u00FAvida sobre o efeito ser real, resolvida"),
+      line = list(color = COL_INFO, width = 2, dash = "dashdot"),
+      hovertemplate = "%{y:.0%}<extra></extra>")
+  }
+  fig |>
+    plotly::layout(
+      xaxis = list(title = x_label(ratio), zeroline = FALSE),
+      yaxis = pct_axis(L("Probability / share", "Probabilidade / propor\u00E7\u00E3o")),
+      shapes = list(hline_shape(target, "#333333")),
+      legend = list(orientation = "h", y = -0.25), hovermode = "x unified") |>
+    plotly_finish()
+}
+
+# Shannon information measures (bits) against sample size.
+plot_entropy_curves <- function(det, ratio, two_sided = FALSE) {
+  x <- det$n_c
+  plotly::plot_ly() |>
+    plotly::add_trace(x = x, y = det$h_outcome, type = "scatter", mode = "lines",
+      name = L("Outcome entropy (1 bit = coin flip)", "Entropia do resultado (1 bit = cara ou coroa)"),
+      line = list(color = COL_POWER, width = 3),
+      hovertemplate = "%{y:.2f} bits<extra></extra>") |>
+    plotly::add_trace(x = x, y = det$mi_truth, type = "scatter", mode = "lines",
+      name = if (two_sided) L("Information about the effect's direction", "Informa\u00E7\u00E3o sobre a dire\u00E7\u00E3o do efeito")
+             else L("Information about whether the effect is real", "Informa\u00E7\u00E3o sobre o efeito ser real"),
+      line = list(color = COL_INFO, width = 3, dash = "dashdot"),
+      hovertemplate = "%{y:.3f} bits<extra></extra>") |>
+    plotly::add_trace(x = x, y = det$mi_theta, type = "scatter", mode = "lines",
+      name = L("Information about the effect's size", "Informa\u00E7\u00E3o sobre o tamanho do efeito"),
+      line = list(color = COL_PRIOR, width = 2, dash = "dash"),
+      hovertemplate = "%{y:.2f} bits<extra></extra>") |>
+    plotly::layout(
+      xaxis = list(title = x_label(ratio), zeroline = FALSE),
+      yaxis = list(title = "bits", rangemode = "tozero"),
+      legend = list(orientation = "h", y = -0.25), hovermode = "x unified") |>
+    plotly_finish()
+}
+
+# The possible outcomes of the trial at one sample size, as one stacked bar.
+plot_outcome_bar <- function(d, two_sided) {
+  parts <- if (two_sided) {
+    list(list(d$detected, L("Real effect detected (right direction)", "Efeito real detectado (dire\u00E7\u00E3o certa)"), COL_DETECT),
+         list(d$missed, L("Real effect missed", "Efeito real n\u00E3o detectado"), "#f4a261"),
+         list(d$wrong_dir, L("Success in the wrong direction", "Sucesso na dire\u00E7\u00E3o errada"), "#e63946"))
+  } else {
+    list(list(d$detected, L("Real effect detected", "Efeito real detectado"), COL_DETECT),
+         list(d$missed, L("Real effect missed", "Efeito real n\u00E3o detectado"), "#f4a261"),
+         list(d$false_success, L("Success without a real effect", "Sucesso sem efeito real"), "#e63946"),
+         list(d$correct_no, L("No real effect, trial negative", "Sem efeito real, ensaio negativo"), "#adb5bd"))
+  }
+  fig <- plotly::plot_ly()
+  for (pt in parts) {
+    fig <- fig |> plotly::add_trace(
+      x = pt[[1]], y = "", type = "bar", orientation = "h", name = pt[[2]],
+      marker = list(color = pt[[3]]), text = if (pt[[1]] >= 0.04) fmt_pct(pt[[1]], 0) else "",
+      textposition = "inside", insidetextanchor = "middle",
+      hovertemplate = paste0(pt[[2]], ": %{x:.1%}<extra></extra>"))
+  }
+  fig |>
+    plotly::layout(barmode = "stack",
+                   xaxis = list(range = c(0, 1), tickformat = ".0%", title = ""),
+                   yaxis = list(showticklabels = FALSE),
+                   legend = list(orientation = "h", y = -0.6, traceorder = "normal"),
+                   margin = list(t = 10, b = 10)) |>
+    plotly_finish() |>
+    plotly::config(displayModeBar = FALSE)
+}

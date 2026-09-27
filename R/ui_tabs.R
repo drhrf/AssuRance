@@ -112,6 +112,70 @@ conditional_tab <- function() {
   )
 }
 
+detect_tab <- function() {
+  nav_panel(
+    tt("Detectability", "Detectabilidade"), value = "Detectability",
+    card(
+      card_header(tt("How easily would the trial detect a true effect?",
+                     "Com que facilidade o ensaio detectaria um efeito verdadeiro?")),
+      numericInput("det_n", tt("Sample size (per group / control group)", "Tamanho amostral (por grupo / grupo controle)"),
+                   value = 200, min = 2, step = 1, width = "260px"),
+      layout_column_wrap(
+        width = 1 / 4, fill = FALSE,
+        value_box(title = tt("Detection if the effect is real", "Detec\u00e7\u00e3o se o efeito for real"),
+                  value = textOutput("det_vb_detect", inline = TRUE),
+                  textOutput("det_vb_detect_sub", inline = TRUE),
+                  theme = value_box_theme(bg = "#2a9d8f", fg = "white")),
+        value_box(title = tt("Real effect missed", "Efeito real n\u00e3o detectado"),
+                  value = textOutput("det_vb_missed", inline = TRUE),
+                  tags$small(tt("Share of all trials", "Propor\u00e7\u00e3o de todos os ensaios")),
+                  theme = "light"),
+        value_box(title = textOutput("det_vb_false_title", inline = TRUE),
+                  value = textOutput("det_vb_false", inline = TRUE),
+                  textOutput("det_vb_false_sub", inline = TRUE),
+                  theme = "light"),
+        value_box(title = tt("Outcome entropy", "Entropia do resultado"),
+                  value = textOutput("det_vb_entropy", inline = TRUE),
+                  tags$small(tt("1 bit = as unpredictable as a coin flip; 0 = certain",
+                                "1 bit = t\u00e3o imprevis\u00edvel quanto cara ou coroa; 0 = certo")),
+                  theme = "light")
+      ),
+      uiOutput("det_text"),
+      h6(class = "mt-3", tt("How the trial could end (share of all virtual trials; detection if real = detected / (detected + missed))",
+                            "Como o ensaio pode terminar (propor\u00e7\u00e3o de todos os ensaios virtuais; detec\u00e7\u00e3o se real = detectado / (detectado + n\u00e3o detectado))")),
+      plotlyOutput("det_bar", height = "170px"),
+      layout_columns(
+        col_widths = c(6, 6),
+        div(h6(tt("Detection and assurance by sample size", "Detec\u00e7\u00e3o e assurance por tamanho amostral")),
+            plotlyOutput("det_curves", height = "420px")),
+        div(h6(tt("Shannon information by sample size", "Informa\u00e7\u00e3o de Shannon por tamanho amostral")),
+            plotlyOutput("det_entropy", height = "420px"))
+      ),
+      tags$details(class = "mt-3",
+        tags$summary(tt("What do these measures mean?", "O que significam estas medidas?")),
+        tags$dl(class = "mt-2 small",
+          tags$dt(tt("Detection if the effect is real", "Detec\u00e7\u00e3o se o efeito for real")),
+          tags$dd(tt("The probability that the trial succeeds, given that the true effect really is beyond the success threshold (for two-sided tests: that it succeeds in the right direction). Unlike assurance, it does not count the scenarios in which the treatment does not work, so it isolates the question 'is the trial big enough to see a real effect?'. It approaches 100% as the sample size grows. Also called expected power (Kunzmann et al., 2021).",
+                     "A probabilidade de o ensaio ter sucesso, dado que o efeito verdadeiro de fato est\u00e1 al\u00e9m do limiar de sucesso (em testes bilaterais: que tenha sucesso na dire\u00e7\u00e3o certa). Ao contr\u00e1rio da assurance, n\u00e3o conta os cen\u00e1rios em que o tratamento n\u00e3o funciona, isolando a pergunta 'o ensaio \u00e9 grande o bastante para ver um efeito real?'. Ela se aproxima de 100% conforme o tamanho amostral cresce. Tamb\u00e9m chamada de poder esperado (Kunzmann et al., 2021).")),
+          tags$dt(tt("How the trial could end", "Como o ensaio pode terminar")),
+          tags$dd(tt("Every virtual trial ends in exactly one of these outcomes, so the shares add up to 100%. Assurance is the sum of the success segments.",
+                     "Cada ensaio virtual termina em exatamente um destes desfechos, ent\u00e3o as propor\u00e7\u00f5es somam 100%. A assurance \u00e9 a soma dos segmentos de sucesso.")),
+          tags$dt(tt("Outcome entropy (Shannon)", "Entropia do resultado (Shannon)")),
+          tags$dd(tt("How unpredictable the trial's result is, in bits: 1 bit is a coin flip, 0 means the result is certain. It is low both when success is nearly certain and when failure is nearly certain, so always read it next to the detection rate.",
+                     "O qu\u00e3o imprevis\u00edvel \u00e9 o resultado do ensaio, em bits: 1 bit \u00e9 cara ou coroa, 0 significa resultado certo. Ela \u00e9 baixa tanto quando o sucesso \u00e9 quase certo quanto quando o fracasso \u00e9 quase certo, por isso leia-a sempre junto da taxa de detec\u00e7\u00e3o.")),
+          tags$dt(tt("Information about whether the effect is real (Shannon mutual information)", "Informa\u00e7\u00e3o sobre o efeito ser real (informa\u00e7\u00e3o m\u00fatua de Shannon)")),
+          tags$dd(tt("How many bits the trial's result (success or not) tells you about whether the true effect is beyond the threshold (for two-sided tests: about its direction). Divided by your prior uncertainty about that question, it gives the share of that doubt the trial resolves. When you are already almost sure the effect is real, there is little doubt to resolve and this share is not shown.",
+                     "Quantos bits o resultado do ensaio (sucesso ou n\u00e3o) informa sobre o efeito verdadeiro estar al\u00e9m do limiar (em testes bilaterais: sobre a sua dire\u00e7\u00e3o). Dividida pela sua incerteza pr\u00e9via sobre essa quest\u00e3o, d\u00e1 a propor\u00e7\u00e3o dessa d\u00favida que o ensaio resolve. Quando voc\u00ea j\u00e1 est\u00e1 quase certo de que o efeito \u00e9 real, h\u00e1 pouca d\u00favida a resolver e essa propor\u00e7\u00e3o n\u00e3o \u00e9 mostrada.")),
+          tags$dt(tt("Information about the effect's size", "Informa\u00e7\u00e3o sobre o tamanho do efeito")),
+          tags$dd(tt("The Shannon mutual information between the true effect and the trial's estimate, 1/2 log2(1 + s_d^2 / v), where s_d is your design prior SD and v the variance of the estimate. The share of uncertainty removed is s_d^2 / (s_d^2 + v): how much narrower your belief about the effect's size is expected to become after the trial.",
+                     "A informa\u00e7\u00e3o m\u00fatua de Shannon entre o efeito verdadeiro e a estimativa do ensaio, 1/2 log2(1 + s_d^2 / v), em que s_d \u00e9 o DP da priori de planejamento e v a vari\u00e2ncia da estimativa. A propor\u00e7\u00e3o de incerteza removida \u00e9 s_d^2 / (s_d^2 + v): o quanto a sua cren\u00e7a sobre o tamanho do efeito deve se estreitar ap\u00f3s o ensaio.")))),
+      tags$small(class = "text-muted d-block mt-2",
+                 tt("All values use the exact engine (averaged over your design prior), so they are instant and noise-free.",
+                    "Todos os valores usam o c\u00e1lculo exato (m\u00e9dia sobre a sua priori de planejamento), por isso s\u00e3o instant\u00e2neos e sem ru\u00eddo."))
+    )
+  )
+}
+
 sensitivity_tab <- function() {
   nav_panel(
     tt("Sensitivity", "Sensibilidade"), value = "Sensitivity",
@@ -269,6 +333,7 @@ main_ui <- function() {
       results_tab(),
       priors_tab(),
       conditional_tab(),
+      detect_tab(),
       sensitivity_tab(),
       compare_tab(),
       prompt_tab(),

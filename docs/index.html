@@ -274,8 +274,8 @@ footer { padding: 40px 0 60px; color: var(--muted); font-size: .9rem; border-top
 <section id="concepts">
   <div class="wrap">
     <div class="eyebrow"><span lang="en">Key concepts</span><span lang="pt">Conceitos-chave</span></div>
-    <h2 lang="en">Six ideas that make everything else easy</h2>
-    <h2 lang="pt">Seis ideias que tornam todo o resto fácil</h2>
+    <h2 lang="en">Seven ideas that make everything else easy</h2>
+    <h2 lang="pt">Sete ideias que tornam todo o resto fácil</h2>
 
     <h3 lang="en">1. Assurance is power, averaged over your uncertainty</h3>
     <h3 lang="pt">1. <em>Assurance</em> é o poder, em média, sobre a sua incerteza</h3>
@@ -339,6 +339,14 @@ footer { padding: 40px 0 60px; color: var(--muted); font-size: .9rem; border-top
     <h3 lang="pt">6. Por que a diferença entre <em>assurance</em> e poder importa</h3>
     <p lang="en">When power is 95% but assurance is 70%, your trial's success depends heavily on your guess being right. The app flags gaps larger than 15 percentage points. It's a prompt to ask: is my expected effect realistic? Can I reduce uncertainty, for example with a pilot study or better evidence? Is the trial still worth running?</p>
     <p lang="pt">Quando o poder é 95% mas a <em>assurance</em> é 70%, o sucesso do seu ensaio depende muito de o seu palpite estar certo. O aplicativo sinaliza diferenças maiores que 15 pontos percentuais. É um convite a perguntar: meu efeito esperado é realista? Posso reduzir a incerteza, por exemplo com um estudo piloto ou evidências melhores? O ensaio ainda vale a pena?</p>
+
+    <h3 lang="en">7. Detectability: would the trial see a real effect?</h3>
+    <h3 lang="pt">7. Detectabilidade: o ensaio veria um efeito real?</h3>
+    <p lang="en">Assurance mixes two different risks: the treatment might not work, and the trial might be too small to show that it does. <strong>Detection if real</strong> separates them. It is the chance of success <em>given</em> that the true effect really is beyond the success threshold. More participants always push it towards 100%, whereas assurance stops at its ceiling.</p>
+    <p lang="pt">A <em>assurance</em> mistura dois riscos diferentes: o tratamento pode não funcionar, e o ensaio pode ser pequeno demais para mostrar que funciona. A <strong>detecção se real</strong> separa os dois. É a chance de sucesso <em>dado</em> que o efeito verdadeiro de fato está além do limiar de sucesso. Mais participantes sempre a levam em direção a 100%, enquanto a <em>assurance</em> para no seu teto.</p>
+    <div class="formula">Assurance = <span lang="en">detection if real</span><span lang="pt">detecção se real</span> × P(<span lang="en">effect real</span><span lang="pt">efeito real</span>) + P(<span lang="en">success without a real effect</span><span lang="pt">sucesso sem efeito real</span>)</div>
+    <p lang="en">The app adds two <strong>Shannon information</strong> measures, in bits. <em>Outcome entropy</em> tells you how predictable the trial's result is (1 bit is a coin flip). <em>Mutual information</em> tells you how much the result will teach you about whether the effect is real, and about its size. Read entropy next to the detection rate: it is low both when success is almost certain and when failure is almost certain.</p>
+    <p lang="pt">O aplicativo acrescenta duas medidas de <strong>informação de Shannon</strong>, em bits. A <em>entropia do resultado</em> diz o quão previsível é o resultado do ensaio (1 bit é cara ou coroa). A <em>informação mútua</em> diz o quanto o resultado vai ensinar sobre o efeito ser real, e sobre o seu tamanho. Leia a entropia junto da taxa de detecção: ela é baixa tanto quando o sucesso é quase certo quanto quando o fracasso é quase certo.</p>
   </div>
 </section>
 
@@ -411,6 +419,23 @@ footer { padding: 40px 0 60px; color: var(--muted); font-size: .9rem; border-top
           <p lang="pt">Para um tamanho amostral escolhido, a chance de sucesso <em>se o efeito verdadeiro fosse exatamente x</em>, para a análise bayesiana (azul) e para o teste frequentista (laranja). A "montanha" cinza é a sua priori de planejamento. O <strong>poder</strong> lê a curva laranja em um único ponto; a <strong><em>assurance</em></strong> faz a média da curva azul sobre a montanha cinza.</p>
         </div>
         <figure><img class="shot" src="img/tab-conditional.png" alt="Success versus true effect tab" loading="lazy"></figure>
+      </div>
+
+      <div class="tour-item" id="tour-detect">
+        <div>
+          <h4><span class="tag">Detectability</span> <span lang="en">Is the trial big enough to see a real effect?</span><span lang="pt">O ensaio é grande o bastante para ver um efeito real?</span></h4>
+          <ul>
+            <li lang="en"><strong>Detection if real</strong> (the headline), with the sample size needed to reach your target.</li>
+            <li lang="pt"><strong>Detecção se real</strong> (o número principal), com o tamanho amostral necessário para atingir a sua meta.</li>
+            <li lang="en"><strong>How the trial could end:</strong> real effect detected, real effect missed, success without a real effect (or in the wrong direction), correctly negative.</li>
+            <li lang="pt"><strong>Como o ensaio pode terminar:</strong> efeito real detectado, efeito real não detectado, sucesso sem efeito real (ou na direção errada), negativo corretamente.</li>
+            <li lang="en"><strong>Shannon information</strong> by sample size: outcome entropy, and bits learned about whether the effect is real and about its size.</li>
+            <li lang="pt"><strong>Informação de Shannon</strong> por tamanho amostral: entropia do resultado, e bits aprendidos sobre o efeito ser real e sobre o seu tamanho.</li>
+          </ul>
+          <p class="small muted" lang="en">In Example B below, at 436 per group: detection if real 82%, real effect missed 17.5%, success without a real effect 0.02%, outcome entropy 0.72 bits.</p>
+          <p class="small muted" lang="pt">No Exemplo B abaixo, com 436 por grupo: detecção se real 82%, efeito real não detectado 17,5%, sucesso sem efeito real 0,02%, entropia do resultado 0,72 bits.</p>
+        </div>
+        <figure><img class="shot" src="img/tab-detectability.png" alt="Detectability tab" loading="lazy"></figure>
       </div>
 
       <div class="tour-item" id="tour-sens">

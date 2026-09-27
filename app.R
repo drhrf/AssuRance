@@ -396,7 +396,9 @@ server <- function(input, output, session) {
     # Sample size needed for the target (exact formulas, no noise)
     k <- length(p$n_c)
     parts <- model_exact(m, p$n_t[k], p$n_c[k], parts = TRUE)
+    det <- detectability(m, p$n_t, p$n_c)
     metrics <- list(
+      n_detect = smallest_n(function(nt, nc) detect_rate(m, nt, nc), p$ratio, p$target),
       n_assur = smallest_n(function(nt, nc) model_exact(m, nt, nc), p$ratio, p$target),
       n_power = smallest_n(function(nt, nc) model_power(m, nt, nc), p$ratio, p$target),
       ceiling = model_ceiling(m),
@@ -406,10 +408,10 @@ server <- function(input, output, session) {
 
     results_rv(list(
       p = p, model = m, inputs = inputs_snapshot, metrics = metrics,
-      seconds = seconds,
+      seconds = seconds, det = det,
       table = data.frame(n_t = p$n_t, n_c = p$n_c, assurance = assur,
                          mc_se = se, exact = exact, power = power,
-                         events = events)))
+                         events = events, detect = det$detect)))
   }
 
   # Start (or restart) a run. ignoreNULL = FALSE also runs it at start-up.
@@ -534,6 +536,7 @@ server <- function(input, output, session) {
     n <- max(results()$p$n_c)
     updateNumericInput(session, "cond_n", value = n)
     updateNumericInput(session, "sens_n", value = n)
+    updateNumericInput(session, "det_n", value = n)
   })
 
   output$stale <- renderUI(W({
@@ -618,7 +621,8 @@ server <- function(input, output, session) {
     n_c = L("n control", "n controle"), total = L("Total n", "n total"),
     enrol = L("Total to enrol", "Total a recrutar"), events = L("Expected events", "Eventos esperados"),
     assur = L("Bayesian assurance", "Assurance bayesiana"), mc = L("MC error (95%)", "Erro de MC (95%)"),
-    exact = L("Exact assurance", "Assurance exata"), power = L("Frequentist power", "Poder frequentista"))
+    exact = L("Exact assurance", "Assurance exata"), power = L("Frequentist power", "Poder frequentista"),
+    detect = L("Detection if real", "Detec\u00e7\u00e3o se real"))
 
   display_table <- function() {
     res <- results(); t <- res$table; p <- res$p; cn <- col_names()
@@ -638,13 +642,14 @@ server <- function(input, output, session) {
       d[[cn$exact]] <- t$exact
     }
     d[[cn$power]] <- t$power
+    d[[cn$detect]] <- t$detect
     d
   }
 
   output$results_table <- renderDT(W({
     d <- display_table(); cn <- col_names()
     pt <- current_lang() == "pt"
-    pct_cols <- intersect(names(d), c(cn$assur, cn$mc, cn$exact, cn$power))
+    pct_cols <- intersect(names(d), c(cn$assur, cn$mc, cn$exact, cn$power, cn$detect))
     datatable(d, rownames = FALSE, class = "compact stripe hover",
               options = list(dom = "t", paging = FALSE, scrollY = "360px",
                              scrollCollapse = TRUE,
@@ -663,7 +668,8 @@ server <- function(input, output, session) {
       # machine-readable: English column names and decimal points
       t <- results()$table
       names(t) <- c("n_treatment", "n_control", "assurance", "assurance_mc_se",
-                    "assurance_exact", "frequentist_power", "expected_events")
+                    "assurance_exact", "frequentist_power", "expected_events",
+                    "detection_if_real")
       utils::write.csv(t, file, row.names = FALSE)
     })
 
@@ -692,6 +698,9 @@ server <- function(input, output, session) {
             strwrap(vapply(res$model$warnings, tx, ""), width = 78, prefix = "  ", initial = "  "), ""),
         L("SUMMARY", "RESUMO"),
         strwrap(build_summary(res), width = 78, prefix = "  ", initial = "  "),
+        "",
+        L("DETECTABILITY (largest sample size)", "DETECTABILIDADE (maior tamanho amostral)"),
+        describe_detectability(res$det[nrow(res$det), ], res$model),
         "",
         L("RESULTS", "RESULTADOS"),
         utils::capture.output(print(tab, row.names = FALSE))
@@ -778,6 +787,44 @@ server <- function(input, output, session) {
                     L(", frequentist power ", ", poder frequentista "), fmt_pct(pw), ".")))
   }))
 
+  # ---- Detectability tab ---------------------------------------------------------
+  det_focus <- reactive({
+    res <- results()
+    n_c <- focus_n(input$det_n); n_t <- treatment_n(n_c, res$p$ratio)
+    c(list(n_t = n_t, n_c = n_c), detectability_one(res$model, n_t, n_c))
+  })
+  output$det_vb_detect <- renderText(W(fmt_pct(det_focus()$detect)))
+  output$det_vb_detect_sub <- renderText(W({
+    res <- results(); n <- res$metrics$n_detect
+    paste0(L("For ", "Para "), fmt_pct(res$p$target, 0), ": ",
+           if (is.na(n)) L("not reachable", "inating\u00edvel") else paste0("n = ", fmt_num(n)))
+  }))
+  output$det_vb_missed <- renderText(W(fmt_pct(det_focus()$missed)))
+  output$det_vb_false_title <- renderText(W(
+    if (results()$model$alt == "two.sided") L("Success in the wrong direction", "Sucesso na dire\u00e7\u00e3o errada")
+    else L("Success without a real effect", "Sucesso sem efeito real")))
+  output$det_vb_false <- renderText(W({
+    d <- det_focus(); fmt_pct(if (results()$model$alt == "two.sided") d$wrong_dir else d$false_success, 2)
+  }))
+  output$det_vb_false_sub <- renderText(W({
+    d <- det_focus()
+    if (is.na(d$ppv)) "" else paste0(L("A success means a real effect ", "Um sucesso significa efeito real "),
+                                     if (d$ppv > 0.999) paste0("> ", fmt_pct(0.999)) else fmt_pct(d$ppv, 1),
+                                     L(" of the time", " das vezes"))
+  }))
+  output$det_vb_entropy <- renderText(W(paste(fmt_dec(det_focus()$h_outcome, 2), "bits")))
+  output$det_text <- renderUI(W({
+    res <- results(); d <- det_focus()
+    tagList(lapply(detect_paragraphs(d, res$model, res$p, res$metrics$n_detect), tags$p))
+  }))
+  output$det_bar <- renderPlotly(W(plot_outcome_bar(det_focus(), results()$model$alt == "two.sided")))
+  output$det_curves <- renderPlotly(W({
+    res <- results(); plot_detect_curves(res$det, res$p$ratio, res$p$target, res$model$alt == "two.sided")
+  }))
+  output$det_entropy <- renderPlotly(W({
+    res <- results(); plot_entropy_curves(res$det, res$p$ratio, res$model$alt == "two.sided")
+  }))
+
   # ---- Sensitivity tab ---------------------------------------------------------
   output$sens_heat <- renderPlotly(W({
     res <- results()
@@ -842,7 +889,7 @@ server <- function(input, output, session) {
         x$label, tx(m$describe), describe_prior(m, "design"),
         if (p$same_prior) L("same", "igual") else describe_prior(m, "analysis"),
         describe_test(m), fmt_num(p$ratio), paste0(last$n_t, " / ", last$n_c),
-        fmt_pct(last$assurance), fmt_pct(last$power),
+        fmt_pct(last$assurance), fmt_pct(last$power), fmt_pct(last$detect),
         if (is.na(x$metrics$n_assur)) L("not reachable", "inating\u00EDvel")
         else paste0(fmt_num(x$metrics$n_assur), " (", fmt_pct(p$target, 0), ")"),
         fmt_pct(x$metrics$ceiling))
@@ -850,6 +897,7 @@ server <- function(input, output, session) {
                       L("Design prior", "Priori de planejamento"), L("Analysis prior", "Priori de an\u00E1lise"),
                       L("Test", "Teste"), L("Ratio", "Raz\u00E3o"), L("Largest n (T / C)", "Maior n (T / C)"),
                       L("Assurance there", "Assurance nele"), L("Power there", "Poder nele"),
+                      L("Detection if real there", "Detec\u00e7\u00e3o se real nele"),
                       L("n for target assurance", "n para a assurance desejada"), L("Ceiling", "Teto"))
       as.data.frame(row, check.names = FALSE)
     }))

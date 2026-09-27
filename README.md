@@ -74,6 +74,14 @@ the reasons given under [Method notes](#method-notes).
   than 15 percentage points between assurance and power, and for two-sided
   tests it notes how much of the "success" is a finding in the unexpected
   direction.
+- **Detectability tab.** It asks how easily the trial would detect a true
+  effect, meaning one beyond the success threshold. The headline is
+  **detection if real**: the probability of success given that the effect is
+  real, which separates "the trial is too small" from "the treatment might not
+  work". The tab also breaks down how the trial could end, and gives Shannon
+  measures in bits: outcome entropy (how predictable the result is) and
+  mutual information (how much the result teaches you about whether the
+  effect is real, and about its size).
 - **Priors tab.** It shows your design and analysis priors and the effects
   that count as a success.
 - **Success vs true effect tab.** It shows how assurance averages the success
@@ -176,16 +184,19 @@ live-app button reads the `APP_URL` constant at the bottom of the page.
 | `R/plots.R` | Plot builders (plotly for the screen, ggplot2 for PNG export) |
 | `R/methods_ui.R` | Content of the *Methods & help* tab |
 | `R/prompt_generator.R` | Builds the prompt for the LLM helper and reads its JSON answer |
+| `R/detectability.R` | Detection if real, outcome breakdown and Shannon information measures |
 | `R/i18n.R` | English / Portuguese interface: translation helpers and the language toggle |
 | `tests/test_calculations.R` | Checks the `bayesassurance` simulation against the exact formula, power against `power.t.test`, and the chunked simulation |
 | `tests/test_models.R` | Checks simulation against exact assurance for every outcome type, plus the survival and binary building blocks |
 | `tests/test_prompt_generator.R` | Checks the prompt builder and the JSON answer parser |
+| `tests/test_detectability.R` | Checks the detectability measures, including against a direct simulation |
 | `tests/test_i18n.R` | Checks that every text has a Portuguese version, number formats, and that all plots build in both languages |
 | `setup.R` | Installs the required packages |
 
 Run the tests from the project folder with `Rscript tests/test_calculations.R`
 (about a minute), `Rscript tests/test_models.R` (about 10 seconds) and
-`Rscript tests/test_prompt_generator.R` and `Rscript tests/test_i18n.R` (both instant).
+`Rscript tests/test_prompt_generator.R`, `Rscript tests/test_i18n.R` and
+`Rscript tests/test_detectability.R` (each a few seconds).
 
 ## Method notes
 
