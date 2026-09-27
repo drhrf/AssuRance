@@ -287,6 +287,97 @@ ui <- function(request) {
         )
       ),
 
+      # ---- LLM prompt helper ----------------------------------------------
+      nav_panel(
+        "LLM prompt helper",
+        p("Not sure what to enter? Describe your project below. The app writes",
+          "a prompt you can paste into an AI assistant (ideally one that can",
+          "search the web) to research evidence-based values for every input.",
+          "Then paste the assistant's answer back in step 3 to fill in the app."),
+        div(class = "alert alert-warning py-2 small",
+            strong("Check before you trust:"), "AI assistants can make mistakes",
+            "or cite sources that do not exist. Verify the key numbers and",
+            "references, and don't paste confidential details into a tool your",
+            "institution has not approved."),
+        layout_columns(
+          col_widths = c(5, 7),
+          card(
+            card_header("1. Describe your project"),
+            textInput("pg_title", "Study title or working name", width = "100%"),
+            textInput("pg_condition", "Condition and population",
+                      placeholder = "e.g. adults with uncontrolled hypertension", width = "100%"),
+            layout_columns(
+              col_widths = c(6, 6),
+              textInput("pg_intervention", "Intervention", placeholder = "e.g. drug X 10 mg daily"),
+              textInput("pg_comparator", "Comparator", placeholder = "e.g. placebo, usual care")
+            ),
+            textInput("pg_outcome", "Primary outcome and units",
+                      placeholder = "e.g. systolic blood pressure (mmHg)", width = "100%"),
+            layout_columns(
+              col_widths = c(6, 6),
+              textInput("pg_timepoint", "Time point", placeholder = "e.g. 12 weeks"),
+              selectInput("pg_phase", "Study type",
+                          c("Pilot / feasibility", "Phase II", "Phase III / confirmatory",
+                            "Pragmatic / effectiveness", "Other / not sure"),
+                          selected = "Phase III / confirmatory")
+            ),
+            radioButtons("pg_direction", "Which outcome values are better?",
+                         c("Higher is better" = "higher", "Lower is better" = "lower",
+                           "Not sure" = "unsure"), selected = "unsure", inline = TRUE),
+            layout_columns(
+              col_widths = c(6, 6),
+              textInput("pg_setting", "Setting / country", placeholder = "e.g. primary care, Brazil"),
+              textInput("pg_mcid", "Meaningful difference (if known)", placeholder = "e.g. 5 mmHg")
+            ),
+            textAreaInput("pg_known", "Evidence you already know about (optional)", rows = 3,
+                          placeholder = "Pilot results, key trials, meta-analyses, DOIs...",
+                          width = "100%"),
+            textAreaInput("pg_constraints", "Practical constraints (optional)", rows = 2,
+                          placeholder = "e.g. can recruit at most 150 per arm in 2 years",
+                          width = "100%"),
+            layout_columns(
+              col_widths = c(6, 6),
+              div(checkboxInput("pg_web", "The AI assistant can search the web", TRUE),
+                  checkboxInput("pg_current", "Include my current app inputs", FALSE)),
+              selectInput("pg_language", "Answer language",
+                          c("English", "Portuguese (Brazil)", "Spanish", "French", "German"))
+            )
+          ),
+          div(
+            card(
+              card_header(
+                class = "d-flex justify-content-between align-items-center flex-wrap gap-2",
+                "2. Copy this prompt into your AI assistant",
+                div(
+                  tags$button(
+                    id = "pg_copy", type = "button", class = "btn btn-sm btn-primary",
+                    onclick = paste0(
+                      "var b=this;navigator.clipboard.writeText(",
+                      "document.getElementById('pg_prompt').innerText).then(function(){",
+                      "b.textContent='Copied!';setTimeout(function(){b.textContent='Copy prompt';},1500);",
+                      "},function(){b.textContent='Select the text and copy it manually';});"),
+                    "Copy prompt"),
+                  downloadButton("dl_prompt", "Download (.txt)", class = "btn-sm btn-outline-primary")
+                )
+              ),
+              tags$style("#pg_prompt { white-space: pre-wrap; max-height: 420px; overflow-y: auto; font-size: 0.8rem; }"),
+              verbatimTextOutput("pg_prompt")
+            ),
+            card(
+              card_header("3. Paste the assistant's answer to fill in the app"),
+              p(class = "small mb-1",
+                "Paste the whole answer, or just its JSON block. Only recognised,",
+                "valid values are applied; you can review them in the sidebar",
+                "before pressing Calculate."),
+              textAreaInput("pg_answer", NULL, rows = 6, width = "100%",
+                            placeholder = "{ \"design_mean\": 5, \"design_sd\": 3, \"sigma\": 10, ... }"),
+              actionButton("pg_apply", "Apply values to the app", class = "btn-primary"),
+              uiOutput("pg_apply_result")
+            )
+          )
+        )
+      ),
+
       # ---- Methods --------------------------------------------------------
       nav_panel("Methods & help", card(methods_ui()))
     )
@@ -301,6 +392,11 @@ server <- function(input, output, session) {
 
   setBookmarkExclude(c(
     "go", "save_scenario", "remove_last", "clear_scenarios", "scenario_label",
+    # LLM prompt helper: free text would bloat the bookmark URL
+    "pg_title", "pg_condition", "pg_intervention", "pg_comparator",
+    "pg_outcome", "pg_timepoint", "pg_phase", "pg_direction", "pg_setting",
+    "pg_mcid", "pg_known", "pg_constraints", "pg_web", "pg_current",
+    "pg_language", "pg_answer", "pg_apply",
     paste0("results_table_", c("rows_current", "rows_all", "rows_selected",
                                "search", "state", "cell_clicked",
                                "cells_selected", "columns_selected"))))
@@ -689,6 +785,73 @@ server <- function(input, output, session) {
         check.names = FALSE)
     }))
   }, striped = TRUE, spacing = "s")
+
+  # ---- LLM prompt helper --------------------------------------------------
+  # Current app inputs, renamed to the JSON field names used in the prompt.
+  current_for_llm <- function() {
+    r <- raw_inputs()
+    v <- r[intersect(names(r), names(LLM_FIELDS))]
+    v$dropout_percent <- r$dropout
+    v[vapply(v, function(x) length(x) == 1 && !is.na(x), logical(1))]
+  }
+
+  llm_prompt <- reactive({
+    info <- list(
+      title = input$pg_title, condition = input$pg_condition,
+      intervention = input$pg_intervention, comparator = input$pg_comparator,
+      outcome = input$pg_outcome, timepoint = input$pg_timepoint,
+      phase = input$pg_phase, direction = input$pg_direction,
+      setting = input$pg_setting, mcid = input$pg_mcid,
+      known = input$pg_known, constraints = input$pg_constraints,
+      web = input$pg_web, language = input$pg_language)
+    build_llm_prompt(info, if (isTRUE(input$pg_current)) current_for_llm())
+  }) |> debounce(400)
+
+  output$pg_prompt <- renderText(llm_prompt())
+  output$dl_prompt <- downloadHandler(
+    filename = function() paste0("assurance-llm-prompt-", stamp(), ".txt"),
+    content = function(file) writeLines(llm_prompt(), file))
+
+  observeEvent(input$pg_apply, {
+    parsed <- parse_llm_values(input$pg_answer)
+    v <- parsed$values
+    labels <- c(design_mean = "Design prior mean", design_sd = "Design prior SD",
+                same_prior = "Analyse with the same prior",
+                analysis_mean = "Analysis prior mean", analysis_sd = "Analysis prior SD",
+                sigma = "Outcome SD", n_min = "Min n", n_max = "Max n", n_step = "Step",
+                ratio = "Allocation ratio", dropout_percent = "Dropout (%)",
+                alt = "Test direction", margin = "Margin", alpha = "Alpha",
+                target = "Target")
+    for (k in names(v)) {
+      val <- v[[k]]
+      switch(k,
+        same_prior      = updateCheckboxInput(session, "same_prior", value = val),
+        alt             = updateRadioButtons(session, "alt", selected = val),
+        target          = updateSliderInput(session, "target", value = val),
+        dropout_percent = updateNumericInput(session, "dropout", value = val),
+        updateNumericInput(session, k, value = val))
+    }
+    output$pg_apply_result <- renderUI({
+      tagList(
+        if (length(v)) {
+          tagList(
+            div(class = "alert alert-success py-2 mt-3 small",
+                paste0("Applied ", length(v), " value(s). Check them in the sidebar, ",
+                       "then press Calculate.")),
+            tags$table(class = "table table-sm small",
+              tags$thead(tags$tr(tags$th("Input"), tags$th("Value"))),
+              tags$tbody(lapply(names(v), function(k)
+                tags$tr(tags$td(labels[[k]]), tags$td(format(v[[k]]))))))
+          )
+        },
+        if (length(parsed$messages))
+          div(class = "alert alert-warning py-2 mt-3 small",
+              tags$ul(class = "mb-0", lapply(parsed$messages, tags$li)))
+      )
+    })
+    if (length(v)) showNotification("Values applied. Press Calculate to update the results.",
+                                    type = "message")
+  })
 }
 
 shinyApp(ui, server, enableBookmarking = "url")

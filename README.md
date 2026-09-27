@@ -49,6 +49,12 @@ package.
 - **Compare scenarios.** Save up to 8 runs and overlay them.
 - **Downloads and sharing.** CSV table, PNG plot, a text report, and a
   bookmark link that restores all inputs.
+- **LLM prompt helper.** Describe your project (condition, intervention,
+  outcome and so on). The app writes a prompt for an AI assistant, ideally
+  one that can search the web, asking it to research evidence-based values
+  for every input, show its sources and conversions, and end with a JSON
+  block. Paste the answer back and the app fills in its inputs, skipping any
+  value that isn't valid. Always check the numbers and references it gives.
 - A **Methods & help** tab with formulas and references.
 
 ![Success vs true effect](docs/screenshot-success-vs-effect.png)
@@ -84,7 +90,7 @@ package.
 5. With `app.R` open, click the blue **Publish** icon at the top right of the
    editor pane. In a Posit Cloud project, the dialog is already set up to
    publish to Posit Cloud.
-   - Make sure `app.R` and all four files in `R/` are ticked. `tests/`,
+   - Make sure `app.R` and all five files in `R/` are ticked. `tests/`,
      `docs/`, `setup.R` and this README aren't needed (a `.rscignore` file
      leaves them out).
    - Give it a title, such as *AssuRance*, and click **Publish**.
@@ -119,11 +125,13 @@ the same.
 | `R/summary_text.R` | Plain-language summary |
 | `R/plots.R` | Plot builders (plotly for the screen, ggplot2 for PNG export) |
 | `R/methods_ui.R` | Content of the *Methods & help* tab |
+| `R/prompt_generator.R` | Builds the prompt for the LLM helper and reads its JSON answer |
 | `tests/test_calculations.R` | Checks the simulation against the exact formula, and power against `power.t.test` |
+| `tests/test_prompt_generator.R` | Checks the prompt builder and the JSON answer parser |
 | `setup.R` | Installs the required packages |
 
-Run the tests with `Rscript tests/test_calculations.R`. They take about a
-minute.
+Run the tests with `Rscript tests/test_calculations.R` (about a minute) and
+`Rscript tests/test_prompt_generator.R` (instant).
 
 ## Method notes
 
