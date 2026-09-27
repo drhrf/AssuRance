@@ -128,33 +128,50 @@ plot_curve_gg <- function(res) {
     ggplot2::theme(legend.position = "top")
 }
 
-# ---- Grid of effect sizes covering the priors -------------------------------
-delta_grid <- function(p, len = 400, include_analysis = TRUE) {
-  lo <- min(p$design_mean - 4 * p$design_sd, 0, -p$margin)
-  hi <- max(p$design_mean + 4 * p$design_sd, 0, p$margin)
-  if (include_analysis && !p$same_prior) {
+# ---- Effect axes -----------------------------------------------------------------
+# Grid of true effects (working scale) covering the priors and thresholds.
+effect_grid <- function(m, len = 400, include_analysis = TRUE) {
+  lo <- min(m$m_d - 4 * m$s_d, 0, m$C)
+  hi <- max(m$m_d + 4 * m$s_d, 0, m$C)
+  if (include_analysis && (m$m_a != m$m_d || m$s_a != m$s_d)) {
     # include the analysis prior's bulk, without letting a very vague
     # analysis prior squash the design prior into a spike
     span <- hi - lo
-    lo <- max(min(lo, p$analysis_mean - 3 * p$analysis_sd), lo - span)
-    hi <- min(max(hi, p$analysis_mean + 3 * p$analysis_sd), hi + span)
+    lo <- max(min(lo, m$m_a - 3 * m$s_a), lo - span)
+    hi <- min(max(hi, m$m_a + 3 * m$s_a), hi + span)
   }
   seq(lo, hi, length.out = len)
 }
 
-success_region <- function(x, p) {
-  switch(p$alt,
-    greater   = x > p$margin,
-    less      = x < -p$margin,
-    two.sided = if (p$design_mean >= 0) x > 0 else x < 0)
+# Plotly x-axis for the effect, on the natural scale (log axis for ratios).
+effect_axis <- function(m, title = m$labels$axis) {
+  if (m$log_axis) list(title = title, type = "log", zeroline = FALSE)
+  else list(title = title, zeroline = FALSE)
 }
 
-# ---- Priors ------------------------------------------------------------------
-plot_priors <- function(p) {
-  x <- delta_grid(p)
-  dd <- dnorm(x, p$design_mean, p$design_sd)
-  da <- dnorm(x, p$analysis_mean, p$analysis_sd)
-  reg <- success_region(x, p)
+success_region <- function(theta, m) {
+  switch(m$alt,
+    greater   = theta > m$C,
+    less      = theta < m$C,
+    two.sided = if (m$m_d >= 0) theta > 0 else theta < 0)
+}
+
+eff_hover <- function(m) {
+  if (m$family == "ratio") "%{x:.3f}" else "%{x:.3g}"
+}
+
+# ---- Priors ------------------------------------------------------------------------
+plot_priors <- function(m) {
+  th <- effect_grid(m)
+  x <- m$nat(th)
+  # densities on the working scale (log scale for ratios), rescaled so the
+  # design prior peaks at 1: only the shapes matter here
+  dd <- dnorm(th, m$m_d, m$s_d)
+  da <- dnorm(th, m$m_a, m$s_a)
+  top <- max(dd)
+  dd <- dd / top; da <- da / top
+  reg <- success_region(th, m)
+  same <- m$m_a == m$m_d && m$s_a == m$s_d
 
   fig <- plotly::plot_ly() |>
     plotly::add_trace(
@@ -165,38 +182,34 @@ plot_priors <- function(p) {
       x = x, y = dd, type = "scatter", mode = "lines",
       name = "Design prior (your belief)",
       line = list(color = COL_ASSUR, width = 3),
-      hovertemplate = "Effect %{x:.3g}<br>Density %{y:.3g}<extra></extra>")
-  if (!p$same_prior) {
+      hovertemplate = paste0("Effect ", eff_hover(m), "<extra></extra>"))
+  if (!same) {
     fig <- fig |>
       plotly::add_trace(
         x = x, y = da, type = "scatter", mode = "lines",
         name = "Analysis prior",
         line = list(color = COL_ANALYSIS, width = 3, dash = "dash"),
-        hovertemplate = "Effect %{x:.3g}<br>Density %{y:.3g}<extra></extra>")
+        hovertemplate = paste0("Effect ", eff_hover(m), "<extra></extra>"))
   }
-  shapes <- list(vline_shape(0, "#333333"))
-  if (p$margin > 0) {
-    shapes <- c(shapes, list(vline_shape(
-      if (p$alt == "less") -p$margin else p$margin, COL_POWER, "dash")))
-  }
+  shapes <- list(vline_shape(m$nat(0), "#333333"))
+  if (abs(m$C) > 1e-12) shapes <- c(shapes, list(vline_shape(m$nat(m$C), COL_POWER, "dash")))
   fig |>
     plotly::layout(
-      xaxis = list(title = "True effect (treatment minus control)",
-                   zeroline = FALSE),
-      yaxis = list(title = "Density", rangemode = "tozero"),
+      xaxis = effect_axis(m),
+      yaxis = list(title = "Relative plausibility", rangemode = "tozero",
+                   showticklabels = FALSE),
       shapes = shapes, legend = list(orientation = "h", y = 1.12)) |>
     plotly::config(displaylogo = FALSE)
 }
 
 # ---- Probability of success as a function of the true effect ----------------
-plot_conditional <- function(p, n_c) {
-  n_t <- treatment_n(n_c, p$ratio)
-  x <- delta_grid(p, include_analysis = FALSE)
-  bayes <- bayes_success_given_delta(x, n_t, n_c, p$analysis_mean,
-                                     p$analysis_sd, p$sigma, p$alpha, p$alt,
-                                     p$margin)
-  freq <- freq_power(n_t, n_c, x, p$sigma, p$alpha, p$alt, p$margin)
-  dens <- dnorm(x, p$design_mean, p$design_sd)
+plot_conditional <- function(m, n_c, ratio) {
+  n_t <- treatment_n(n_c, ratio)
+  th <- effect_grid(m, include_analysis = FALSE)
+  x <- m$nat(th)
+  bayes <- model_cond(m, th, n_t, n_c)
+  freq <- rep_len(m$power_at(th, n_t, n_c), length(th))
+  dens <- dnorm(th, m$m_d, m$s_d)
   dens <- dens / max(dens)
 
   plotly::plot_ly() |>
@@ -209,91 +222,118 @@ plot_conditional <- function(p, n_c) {
       x = x, y = bayes, type = "scatter", mode = "lines",
       name = "Bayesian analysis succeeds",
       line = list(color = COL_ASSUR, width = 3),
-      hovertemplate = "True effect %{x:.3g}<br>P(success) %{y:.1%}<extra>Bayesian</extra>") |>
+      hovertemplate = paste0("True effect ", eff_hover(m),
+                             "<br>P(success) %{y:.1%}<extra>Bayesian</extra>")) |>
     plotly::add_trace(
       x = x, y = freq, type = "scatter", mode = "lines",
-      name = "t-test significant",
+      name = "Frequentist test significant",
       line = list(color = COL_POWER, width = 3, dash = "dash"),
-      hovertemplate = "True effect %{x:.3g}<br>Power %{y:.1%}<extra>Frequentist</extra>") |>
+      hovertemplate = paste0("True effect ", eff_hover(m),
+                             "<br>Power %{y:.1%}<extra>Frequentist</extra>")) |>
     plotly::layout(
-      xaxis = list(title = "True effect (treatment minus control)",
-                   zeroline = FALSE),
+      xaxis = effect_axis(m),
       yaxis = pct_axis("Probability of success"),
-      shapes = list(vline_shape(p$design_mean, COL_PRIOR, "dash")),
+      shapes = list(vline_shape(m$nat(m$m_d), COL_PRIOR, "dash")),
       annotations = list(list(
-        x = p$design_mean, y = 1.02, yref = "y", showarrow = FALSE,
-        text = "design mean", font = list(size = 11, color = COL_PRIOR))),
+        x = if (m$log_axis) log10(m$nat(m$m_d)) else m$nat(m$m_d),
+        y = 1.02, yref = "y", showarrow = FALSE,
+        text = "design prior centre", font = list(size = 11, color = COL_PRIOR))),
       legend = list(orientation = "h", y = 1.15)) |>
     plotly::config(displaylogo = FALSE)
 }
 
-# ---- Sensitivity: design prior mean x SD ------------------------------------
-sensitivity_grid <- function(p, n_c, len = 45) {
-  n_t <- treatment_n(n_c, p$ratio)
-  span <- max(p$design_sd, abs(p$design_mean) / 2, p$sigma / 20)
-  means <- seq(p$design_mean - 2 * span, p$design_mean + 2 * span,
-               length.out = len)
-  sds <- seq(p$design_sd / 5, p$design_sd * 3, length.out = len)
-  z <- outer(sds, means, function(s, m) {
-    # when the analysis prior copies the design prior, it moves with it
-    am <- if (p$same_prior) m else p$analysis_mean
-    as_ <- if (p$same_prior) s else p$analysis_sd
-    exact_assurance(n_t, n_c, m, s, am, as_, p$sigma, p$alpha, p$alt,
-                    p$margin)
-  })
-  list(means = means, sds = sds, z = z)
+# ---- Sensitivity: design prior centre x SD ------------------------------------
+sd_label <- function(m, which = "Design") {
+  switch(m$family,
+    additive = paste(which, "prior SD"),
+    rd       = paste(which, "prior SD (percentage points)"),
+    ratio    = paste0(which, " prior SD (log ", m$labels$short, ")"))
 }
+sd_display <- function(m, s) if (m$family == "rd") 100 * s else s
 
-plot_sensitivity_heat <- function(p, n_c) {
-  g <- sensitivity_grid(p, n_c)
+plot_sensitivity_heat <- function(m, n_c, ratio, same_prior, len = 41) {
+  n_t <- treatment_n(n_c, ratio)
+  span <- max(m$s_d, abs(m$m_d) / 2, sqrt(m$se2(m$m_d, n_t, n_c)) / 2)
+  means <- seq(m$m_d - 2 * span, m$m_d + 2 * span, length.out = len)
+  sds <- seq(m$s_d / 5, m$s_d * 3, length.out = len)
+  z <- outer(sds, means, Vectorize(function(s, mu) {
+    # when the analysis prior copies the design prior, it moves with it
+    mm <- if (same_prior) model_with_priors(m, mu, s, mu, s)
+          else model_with_priors(m, m_d = mu, s_d = s)
+    model_exact(mm, n_t, n_c)
+  }))
   plotly::plot_ly(
-    x = g$means, y = g$sds, z = g$z, type = "contour",
-    colorscale = "Blues", reversescale = TRUE,
-    zmin = 0, zmax = 1,
+    x = m$nat(means), y = sd_display(m, sds), z = z, type = "contour",
+    colorscale = "Blues", reversescale = TRUE, zmin = 0, zmax = 1,
     contours = list(start = 0, end = 1, size = 0.1, showlabels = TRUE,
                     labelfont = list(color = "white")),
     colorbar = list(title = "Assurance", tickformat = ".0%"),
-    hovertemplate = paste0("Design mean %{x:.3g}<br>Design SD %{y:.3g}",
+    hovertemplate = paste0("Prior centre ", eff_hover(m), "<br>SD %{y:.3g}",
                            "<br>Assurance %{z:.1%}<extra></extra>")) |>
     plotly::add_markers(
-      x = p$design_mean, y = p$design_sd, inherit = FALSE,
+      x = m$nat(m$m_d), y = sd_display(m, m$s_d), inherit = FALSE,
       marker = list(color = COL_POWER, size = 12, symbol = "x"),
       name = "Your inputs", hoverinfo = "name") |>
-    plotly::layout(xaxis = list(title = "Design prior mean (expected effect)"),
-                   yaxis = list(title = "Design prior SD (uncertainty)"),
+    plotly::layout(xaxis = effect_axis(m, paste0("Design prior centre (", m$labels$short, ")")),
+                   yaxis = list(title = sd_label(m)),
                    showlegend = FALSE) |>
     plotly::config(displaylogo = FALSE)
 }
 
-plot_sensitivity_analysis_sd <- function(p, n_c) {
-  n_t <- treatment_n(n_c, p$ratio)
-  sds <- 10^seq(log10(p$sigma / 50), log10(p$sigma * 200), length.out = 120)
-  cur_mean <- if (p$same_prior) p$design_mean else p$analysis_mean
-  cur_sd <- if (p$same_prior) p$design_sd else p$analysis_sd
-  y_cur <- exact_assurance(n_t, n_c, p$design_mean, p$design_sd, cur_mean,
-                           sds, p$sigma, p$alpha, p$alt, p$margin)
-  y_zero <- exact_assurance(n_t, n_c, p$design_mean, p$design_sd, 0,
-                            sds, p$sigma, p$alpha, p$alt, p$margin)
+plot_sensitivity_analysis_sd <- function(m, n_c, ratio) {
+  n_t <- treatment_n(n_c, ratio)
+  ref <- max(m$s_d, sqrt(m$se2(m$m_d, n_t, n_c)))
+  sds <- 10^seq(log10(ref / 20), log10(ref * 200), length.out = 120)
+  y_cur <- vapply(sds, function(s) model_exact(model_with_priors(m, s_a = s), n_t, n_c), 0)
   fig <- plotly::plot_ly() |>
     plotly::add_trace(
-      x = sds, y = y_cur, type = "scatter", mode = "lines",
-      name = paste0("Analysis prior centred at ", fmt_num(cur_mean)),
+      x = sd_display(m, sds), y = y_cur, type = "scatter", mode = "lines",
+      name = paste0("Analysis prior centred at ", m$fmt_eff(m$m_a)),
       line = list(color = COL_ASSUR, width = 3),
       hovertemplate = "Analysis SD %{x:.3g}<br>Assurance %{y:.1%}<extra></extra>")
-  if (cur_mean != 0) {
+  if (abs(m$m_a) > 1e-12) {
+    y_zero <- vapply(sds, function(s)
+      model_exact(model_with_priors(m, m_a = 0, s_a = s), n_t, n_c), 0)
     fig <- fig |>
       plotly::add_trace(
-        x = sds, y = y_zero, type = "scatter", mode = "lines",
-        name = "Sceptical analysis prior (centred at 0)",
+        x = sd_display(m, sds), y = y_zero, type = "scatter", mode = "lines",
+        name = "Sceptical analysis prior (centred on no effect)",
         line = list(color = COL_ANALYSIS, width = 3, dash = "dash"),
         hovertemplate = "Analysis SD %{x:.3g}<br>Assurance %{y:.1%}<extra></extra>")
   }
   fig |>
     plotly::layout(
-      xaxis = list(title = "Analysis prior SD (log scale; right = vaguer)",
+      xaxis = list(title = paste(sd_label(m, "Analysis"), "- log axis; right = vaguer"),
                    type = "log"),
       yaxis = pct_axis("Assurance"),
-      shapes = list(vline_shape(cur_sd, COL_PRIOR, "dash")),
+      shapes = list(vline_shape(sd_display(m, m$s_a), COL_PRIOR, "dash")),
+      legend = list(orientation = "h", y = 1.15)) |>
+    plotly::config(displaylogo = FALSE)
+}
+
+# ---- Sensitivity to the outcome-specific ("nuisance") assumption ------------------
+# p : the validated inputs of the run (used to rebuild the model).
+plot_sensitivity_nuisance <- function(p, m, n_c) {
+  n_t <- treatment_n(n_c, p$ratio)
+  nu <- m$nuisance
+  vals <- nu$values
+  res <- t(vapply(vals, function(v) {
+    mm <- build_model(nu$set(p, v))
+    c(model_exact(mm, n_t, n_c), model_power(mm, n_t, n_c))
+  }, numeric(2)))
+  plotly::plot_ly() |>
+    plotly::add_trace(
+      x = vals, y = res[, 1], type = "scatter", mode = "lines",
+      name = "Bayesian assurance", line = list(color = COL_ASSUR, width = 3),
+      hovertemplate = "%{x:.3g}<br>Assurance %{y:.1%}<extra></extra>") |>
+    plotly::add_trace(
+      x = vals, y = res[, 2], type = "scatter", mode = "lines",
+      name = "Frequentist power", line = list(color = COL_POWER, width = 3, dash = "dash"),
+      hovertemplate = "%{x:.3g}<br>Power %{y:.1%}<extra></extra>") |>
+    plotly::layout(
+      xaxis = list(title = nu$label, zeroline = FALSE),
+      yaxis = pct_axis("Probability of success"),
+      shapes = list(vline_shape(nu$current, COL_PRIOR, "dash")),
       legend = list(orientation = "h", y = 1.15)) |>
     plotly::config(displaylogo = FALSE)
 }

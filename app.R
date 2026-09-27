@@ -1,17 +1,21 @@
 # =============================================================================
-# AssuRance: Bayesian assurance vs. frequentist power for a two-arm trial
-# with a continuous (normal) outcome and known SD.
+# AssuRance: Bayesian assurance vs. frequentist power for two-arm trials with
+# continuous, baseline-adjusted (ANCOVA), binary or time-to-event outcomes.
 #
 # Run locally:   shiny::runApp()        (from this directory)
 #
-# Files
-#   app.R               UI and server (this file)
-#   R/calculations.R    statistical engine; documents the mapping from these
+# Files (Shiny sources everything in R/ automatically)
+#   app.R               server logic (this file)
+#   R/calculations.R    outcome-agnostic engine; documents the mapping of the
 #                       inputs to bayesassurance's parameters
+#   R/models.R          one "model" per outcome type (variances, simulators,
+#                       power, labels)
+#   R/ui_sidebar.R      sidebar inputs
+#   R/ui_tabs.R         main panel and tabs
 #   R/summary_text.R    plain-language summary
 #   R/plots.R           plot builders
+#   R/prompt_generator.R  LLM prompt helper
 #   R/methods_ui.R      "Methods & help" tab
-# Shiny sources everything in R/ automatically.
 # =============================================================================
 
 library(shiny)
@@ -20,17 +24,6 @@ library(plotly)
 library(ggplot2)
 library(DT)
 library(bayesassurance)
-
-# Input label with an (i) icon that shows a plain-language tooltip.
-lab <- function(text, tip) {
-  tags$span(text, " ",
-            tooltip(tags$span("\u24D8", class = "text-primary",
-                              style = "cursor: help;"),
-                    tip, placement = "right"))
-}
-
-# Small grey help line under an input.
-hint <- function(...) tags$div(class = "form-text mb-3", style = "margin-top:-0.6rem;", ...)
 
 
 # ============================================================================
@@ -41,360 +34,8 @@ ui <- function(request) {
     title = "AssuRance: Bayesian assurance vs. frequentist power",
     theme = bs_theme(version = 5, primary = "#1f5fa8"),
     fillable = FALSE,
-
-    sidebar = sidebar(
-      width = 370,
-      accordion(
-        multiple = TRUE,
-        open = c("Effect and priors", "Trial design"),
-
-        # ---- Priors ------------------------------------------------------
-        accordion_panel(
-          "Effect and priors",
-          numericInput("design_mean",
-            lab("Expected effect (design prior mean)",
-                "Your best guess of the true difference in means (treatment minus control), in the outcome's units."),
-            value = 5),
-          numericInput("design_sd",
-            lab("Uncertainty about the effect (design prior SD)",
-                "How unsure you are. About 95% of the effects you consider plausible lie within mean \u00B1 2 SD. Must be > 0."),
-            value = 3, min = 0),
-          hint("The design prior describes what you believe; it is used only to plan the study."),
-          checkboxInput("same_prior", "Analyse with the same prior", value = TRUE),
-          hint("Simple, but it builds your optimism into the final analysis. Untick to use a sceptical or vague analysis prior."),
-          conditionalPanel(
-            "!input.same_prior",
-            numericInput("analysis_mean",
-              lab("Analysis prior mean",
-                  "Centre of the prior used when the trial is analysed. 0 gives a 'sceptical' prior centred on no effect."),
-              value = 0),
-            numericInput("analysis_sd",
-              lab("Analysis prior SD",
-                  "Spread of the analysis prior. A very large value (e.g. 1000) lets the data speak for themselves, which is close to a frequentist analysis."),
-              value = 10, min = 0)
-          )
-        ),
-
-        # ---- Design ------------------------------------------------------
-        accordion_panel(
-          "Trial design",
-          numericInput("sigma",
-            lab("Outcome standard deviation",
-                "Person-to-person variability of the outcome within each group (pooled), assumed known. Must be > 0."),
-            value = 10, min = 0),
-          tags$label(class = "form-label",
-                     lab("Sample sizes to evaluate (per group)",
-                         "Analysable participants in each group. With unequal allocation these are control-group sizes. Every value from minimum to maximum, in the given steps, is evaluated.")),
-          layout_columns(
-            col_widths = c(4, 4, 4), gap = "0.5rem",
-            numericInput("n_min", "Min", value = 20, min = 2, step = 1),
-            numericInput("n_max", "Max", value = 200, min = 3, step = 1),
-            numericInput("n_step", "Step", value = 10, min = 1, step = 1)
-          ),
-          numericInput("ratio",
-            lab("Allocation ratio (treatment : control)",
-                "1 = equal groups. 2 = two treated participants for every control. The treatment-group size is ratio x control size."),
-            value = 1, min = 0.1, max = 10, step = 0.5),
-          numericInput("dropout",
-            lab("Expected dropout (%)",
-                "Share of enrolled participants you expect to lose. It does not change the probabilities; it only inflates the number to enrol."),
-            value = 0, min = 0, max = 90, step = 5)
-        ),
-
-        # ---- Success -----------------------------------------------------
-        accordion_panel(
-          "What counts as success",
-          radioButtons("alt",
-            lab("Test direction",
-                "Two-sided counts a clear difference in either direction. One-sided only counts a difference in the stated direction."),
-            choices = c("Two-sided" = "two.sided",
-                        "One-sided: treatment > control" = "greater",
-                        "One-sided: treatment < control" = "less"),
-            selected = "two.sided"),
-          conditionalPanel(
-            "input.alt != 'two.sided'",
-            numericInput("margin",
-              lab("Clinically meaningful difference (margin)",
-                  "Success requires showing the effect is larger than this, not merely above zero. Use 0 for an ordinary test."),
-              value = 0, min = 0)
-          ),
-          numericInput("alpha",
-            lab("Significance threshold (alpha)",
-                "Frequentist: the p-value cut-off. Bayesian: success if the posterior probability of an effect in the tested direction exceeds 1 - alpha (1 - alpha/2 per direction for two-sided)."),
-            value = 0.05, min = 0.0001, max = 0.5, step = 0.005),
-          sliderInput("target",
-            lab("Target probability of success",
-                "The level you are aiming for, commonly 80% or 90%. Shown as a reference line; the app finds the sample size that reaches it."),
-            min = 0.5, max = 0.99, value = 0.8, step = 0.01)
-        ),
-
-        # ---- Computation -------------------------------------------------
-        accordion_panel(
-          "Computation",
-          radioButtons("engine",
-            lab("Assurance engine",
-                "Simulation uses the bayesassurance package (slower, with a little random error). Exact uses the closed-form formula (instant); the two agree up to simulation error."),
-            choices = c("Simulation: bayesassurance" = "sim",
-                        "Exact formula (instant)" = "exact"),
-            selected = "sim"),
-          conditionalPanel(
-            "input.engine == 'sim'",
-            numericInput("mc_iter",
-              lab("Simulated trials per sample size",
-                  "More simulations give a smoother, more precise curve but take longer. The error is at most about 1/sqrt(number) (95% interval)."),
-              value = 2000, min = 100, max = 50000, step = 500),
-            numericInput("seed", "Random seed (reproducibility)", value = 2024),
-            checkboxInput("show_exact", "Overlay exact curve as a check", value = TRUE)
-          ),
-          uiOutput("time_estimate")
-        )
-      ),
-      actionButton("go", "Calculate", class = "btn-primary btn-lg w-100"),
-      uiOutput("stale"),
-      bookmarkButton(label = "Share / bookmark these inputs",
-                     class = "btn-outline-secondary btn-sm w-100")
-    ),
-
-    # Floating progress box with a Stop button, shown while a simulation runs
-    conditionalPanel(
-      "output.running",
-      div(class = "card shadow",
-          style = "position: fixed; bottom: 20px; right: 20px; width: 340px; z-index: 2000;",
-          div(class = "card-body",
-              strong("Simulating trials with bayesassurance"),
-              uiOutput("run_progress"),
-              actionButton("stop", "Stop run", class = "btn-danger btn-sm w-100 mt-2"),
-              tags$small(class = "d-block text-muted mt-2",
-                         "You can keep using the other tabs meanwhile. Pressing",
-                         "Calculate again restarts with the current inputs.")))
-    ),
-
-    navset_card_underline(
-      id = "tabs",
-
-      # ---- Results -------------------------------------------------------
-      nav_panel(
-        "Results",
-        layout_column_wrap(
-          width = 1 / 4, fill = FALSE,
-          value_box(title = textOutput("vb_assur_title", inline = TRUE),
-                    value = textOutput("vb_assur", inline = TRUE),
-                    theme = "primary"),
-          value_box(title = textOutput("vb_power_title", inline = TRUE),
-                    value = textOutput("vb_power", inline = TRUE),
-                    theme = value_box_theme(bg = "#d1661a", fg = "white")),
-          value_box(title = textOutput("vb_n_title", inline = TRUE),
-                    value = textOutput("vb_n", inline = TRUE),
-                    textOutput("vb_n_sub", inline = TRUE),
-                    theme = "light"),
-          value_box(title = "Assurance ceiling (unlimited n)",
-                    value = textOutput("vb_ceiling", inline = TRUE),
-                    tags$small("Highest assurance any sample size can reach"),
-                    theme = "light")
-        ),
-        card(
-          card_header("Probability of success by sample size"),
-          plotlyOutput("curve", height = "440px"),
-          card_footer(tags$small(textOutput("curve_note", inline = TRUE)))
-        ),
-        card(
-          card_header("Summary in plain language"),
-          uiOutput("summary")
-        ),
-        card(
-          card_header(
-            class = "d-flex justify-content-between align-items-center flex-wrap gap-2",
-            "Results table",
-            div(
-              downloadButton("dl_csv", "CSV", class = "btn-sm btn-outline-primary"),
-              downloadButton("dl_png", "Plot (PNG)", class = "btn-sm btn-outline-primary"),
-              downloadButton("dl_report", "Report (.txt)", class = "btn-sm btn-outline-primary")
-            )
-          ),
-          DTOutput("results_table")
-        ),
-        card(
-          card_header("Save this run as a scenario to compare"),
-          layout_columns(
-            col_widths = c(8, 4),
-            textInput("scenario_label", NULL, placeholder = "Scenario name (optional)"),
-            actionButton("save_scenario", "Save scenario", class = "btn-outline-primary w-100")
-          )
-        )
-      ),
-
-      # ---- Priors --------------------------------------------------------
-      nav_panel(
-        "Priors",
-        card(
-          card_header("Your design prior (and analysis prior, if different)"),
-          plotlyOutput("prior_plot", height = "400px"),
-          uiOutput("prior_text")
-        )
-      ),
-
-      # ---- Conditional success -------------------------------------------
-      nav_panel(
-        "Success vs true effect",
-        card(
-          card_header("How likely is success if the true effect were exactly x?"),
-          numericInput("cond_n", "Sample size (per group / control group)",
-                       value = 200, min = 2, step = 1, width = "260px"),
-          plotlyOutput("cond_plot", height = "420px"),
-          p(class = "mt-2",
-            "The solid blue curve is the chance that the Bayesian analysis",
-            "declares success if the true effect were exactly the value on",
-            "the x-axis; the dashed orange curve is the same for the t-test.",
-            "Frequentist power reads the orange curve at a single point (the",
-            "design mean). Assurance is the blue curve averaged over the grey",
-            "design prior, so effects you consider plausible but small pull it",
-            "down."),
-          uiOutput("cond_text")
-        )
-      ),
-
-      # ---- Sensitivity ---------------------------------------------------
-      nav_panel(
-        "Sensitivity",
-        card(
-          card_header("How much do the results depend on your assumptions?"),
-          numericInput("sens_n", "Sample size (per group / control group)",
-                       value = 200, min = 2, step = 1, width = "260px"),
-          p("Values here use the exact formula, so they update instantly and",
-            "carry no simulation noise."),
-          layout_columns(
-            col_widths = c(6, 6),
-            div(h6("Assurance across design priors"),
-                plotlyOutput("sens_heat", height = "400px"),
-                tags$small("The orange x marks your inputs. Contours show",
-                           "assurance; moving right (a larger expected",
-                           "effect) or down (more certainty) usually helps.")),
-            div(h6("Assurance across analysis priors"),
-                plotlyOutput("sens_asd", height = "400px"),
-                tags$small("Far right = vague analysis prior (data-driven",
-                           "analysis). The dashed vertical line marks your",
-                           "current analysis prior SD."))
-          )
-        )
-      ),
-
-      # ---- Scenario comparison ---------------------------------------------
-      nav_panel(
-        "Compare scenarios",
-        card(
-          card_header(
-            class = "d-flex justify-content-between align-items-center flex-wrap gap-2",
-            "Saved scenarios",
-            div(
-              actionButton("remove_last", "Remove last", class = "btn-sm btn-outline-secondary"),
-              actionButton("clear_scenarios", "Clear all", class = "btn-sm btn-outline-danger")
-            )
-          ),
-          layout_columns(
-            col_widths = c(6, 6),
-            checkboxInput("cmp_power", "Also show frequentist power (dashed)", FALSE),
-            checkboxInput("cmp_total", "x-axis: total sample size (both groups)", FALSE)
-          ),
-          uiOutput("cmp_empty"),
-          plotlyOutput("cmp_plot", height = "420px"),
-          tableOutput("cmp_table")
-        )
-      ),
-
-      # ---- LLM prompt helper ----------------------------------------------
-      nav_panel(
-        "LLM prompt helper",
-        p("Not sure what to enter? Describe your project below. The app writes",
-          "a prompt you can paste into an AI assistant (ideally one that can",
-          "search the web) to research evidence-based values for every input.",
-          "Then paste the assistant's answer back in step 3 to fill in the app."),
-        div(class = "alert alert-warning py-2 small",
-            strong("Check before you trust:"), "AI assistants can make mistakes",
-            "or cite sources that do not exist. Verify the key numbers and",
-            "references, and don't paste confidential details into a tool your",
-            "institution has not approved."),
-        layout_columns(
-          col_widths = c(5, 7),
-          card(
-            card_header("1. Describe your project"),
-            textInput("pg_title", "Study title or working name", width = "100%"),
-            textInput("pg_condition", "Condition and population",
-                      placeholder = "e.g. adults with uncontrolled hypertension", width = "100%"),
-            layout_columns(
-              col_widths = c(6, 6),
-              textInput("pg_intervention", "Intervention", placeholder = "e.g. drug X 10 mg daily"),
-              textInput("pg_comparator", "Comparator", placeholder = "e.g. placebo, usual care")
-            ),
-            textInput("pg_outcome", "Primary outcome and units",
-                      placeholder = "e.g. systolic blood pressure (mmHg)", width = "100%"),
-            layout_columns(
-              col_widths = c(6, 6),
-              textInput("pg_timepoint", "Time point", placeholder = "e.g. 12 weeks"),
-              selectInput("pg_phase", "Study type",
-                          c("Pilot / feasibility", "Phase II", "Phase III / confirmatory",
-                            "Pragmatic / effectiveness", "Other / not sure"),
-                          selected = "Phase III / confirmatory")
-            ),
-            radioButtons("pg_direction", "Which outcome values are better?",
-                         c("Higher is better" = "higher", "Lower is better" = "lower",
-                           "Not sure" = "unsure"), selected = "unsure", inline = TRUE),
-            layout_columns(
-              col_widths = c(6, 6),
-              textInput("pg_setting", "Setting / country", placeholder = "e.g. primary care, Brazil"),
-              textInput("pg_mcid", "Meaningful difference (if known)", placeholder = "e.g. 5 mmHg")
-            ),
-            textAreaInput("pg_known", "Evidence you already know about (optional)", rows = 3,
-                          placeholder = "Pilot results, key trials, meta-analyses, DOIs...",
-                          width = "100%"),
-            textAreaInput("pg_constraints", "Practical constraints (optional)", rows = 2,
-                          placeholder = "e.g. can recruit at most 150 per arm in 2 years",
-                          width = "100%"),
-            layout_columns(
-              col_widths = c(6, 6),
-              div(checkboxInput("pg_web", "The AI assistant can search the web", TRUE),
-                  checkboxInput("pg_current", "Include my current app inputs", FALSE)),
-              selectInput("pg_language", "Answer language",
-                          c("English", "Portuguese (Brazil)", "Spanish", "French", "German"))
-            )
-          ),
-          div(
-            card(
-              card_header(
-                class = "d-flex justify-content-between align-items-center flex-wrap gap-2",
-                "2. Copy this prompt into your AI assistant",
-                div(
-                  tags$button(
-                    id = "pg_copy", type = "button", class = "btn btn-sm btn-primary",
-                    onclick = paste0(
-                      "var b=this;navigator.clipboard.writeText(",
-                      "document.getElementById('pg_prompt').innerText).then(function(){",
-                      "b.textContent='Copied!';setTimeout(function(){b.textContent='Copy prompt';},1500);",
-                      "},function(){b.textContent='Select the text and copy it manually';});"),
-                    "Copy prompt"),
-                  downloadButton("dl_prompt", "Download (.txt)", class = "btn-sm btn-outline-primary")
-                )
-              ),
-              tags$style("#pg_prompt { white-space: pre-wrap; max-height: 420px; overflow-y: auto; font-size: 0.8rem; }"),
-              verbatimTextOutput("pg_prompt")
-            ),
-            card(
-              card_header("3. Paste the assistant's answer to fill in the app"),
-              p(class = "small mb-1",
-                "Paste the whole answer, or just its JSON block. Only recognised,",
-                "valid values are applied; you can review them in the sidebar",
-                "before pressing Calculate."),
-              textAreaInput("pg_answer", NULL, rows = 6, width = "100%",
-                            placeholder = "{ \"design_mean\": 5, \"design_sd\": 3, \"sigma\": 10, ... }"),
-              actionButton("pg_apply", "Apply values to the app", class = "btn-primary"),
-              uiOutput("pg_apply_result")
-            )
-          )
-        )
-      ),
-
-      # ---- Methods --------------------------------------------------------
-      nav_panel("Methods & help", card(methods_ui()))
-    )
+    sidebar = sidebar_ui(),
+    main_ui()
   )
 }
 
@@ -402,6 +43,38 @@ ui <- function(request) {
 # ============================================================================
 # Server
 # ============================================================================
+
+# Every input that feeds the calculation.
+MODEL_INPUTS <- c(
+  "otype", "measure", "sigma", "rho", "p_control", "surv_median", "time_unit",
+  "accrual", "followup", "loss_pct",
+  "design_mean", "design_sd", "analysis_mean", "analysis_sd",
+  "rd_design_mean", "rd_design_sd", "rd_analysis_mean", "rd_analysis_sd",
+  "ratio_design_lo", "ratio_design_hi", "ratio_analysis_lo", "ratio_analysis_hi",
+  "same_prior", "n_min", "n_max", "n_step", "ratio", "dropout", "alt",
+  "threshold", "rd_threshold", "ratio_threshold", "alpha", "target",
+  "engine", "mc_iter", "seed", "show_exact")
+
+# The inputs that matter for a given outcome type (used to decide whether the
+# shown results are out of date).
+relevant_inputs <- function(r) {
+  fam <- scale_family(r$otype, r$measure)
+  common <- c("otype", "same_prior", "n_min", "n_max", "n_step", "ratio",
+              "alt", "alpha", "target", "engine", "mc_iter", "seed", "show_exact")
+  type <- switch(r$otype,
+    cont   = "sigma",
+    ancova = c("sigma", "rho"),
+    binary = c("measure", "p_control", "dropout"),
+    surv   = c("surv_median", "time_unit", "accrual", "followup", "loss_pct"))
+  if (r$otype %in% c("cont", "ancova")) type <- c(type, "dropout")
+  priors <- switch(fam,
+    additive = c("design_mean", "design_sd", "analysis_mean", "analysis_sd", "threshold"),
+    rd       = c("rd_design_mean", "rd_design_sd", "rd_analysis_mean", "rd_analysis_sd", "rd_threshold"),
+    ratio    = c("ratio_design_lo", "ratio_design_hi", "ratio_analysis_lo",
+                 "ratio_analysis_hi", "ratio_threshold"))
+  r[c(common, type, priors)]
+}
+
 server <- function(input, output, session) {
 
   setBookmarkExclude(c(
@@ -415,27 +88,69 @@ server <- function(input, output, session) {
                                "search", "state", "cell_clicked",
                                "cells_selected", "columns_selected"))))
 
-  input_ids <- c("design_mean", "design_sd", "same_prior", "analysis_mean",
-                 "analysis_sd", "sigma", "n_min", "n_max", "n_step", "ratio",
-                 "dropout", "alt", "margin", "alpha", "target", "engine",
-                 "mc_iter", "seed", "show_exact")
-  raw_inputs <- reactive(lapply(setNames(input_ids, input_ids),
+  raw_inputs <- reactive(lapply(setNames(MODEL_INPUTS, MODEL_INPUTS),
                                 function(id) input[[id]]))
 
+  st <- new.env()          # non-reactive state
+  st$job <- NULL           # the running simulation
+  st$prev_otype <- NULL
+  st$skip_n_defaults <- FALSE
+
   # ---- Collect and validate inputs --------------------------------------
-  params <- reactive({
+  # Returns list(p = validated inputs, m = model from R/models.R).
+  config <- reactive({
     r <- raw_inputs()
+    req(r$otype)
     is_num   <- function(x) is.numeric(x) && length(x) == 1 && is.finite(x)
     is_whole <- function(x) is_num(x) && abs(x - round(x)) < 1e-8
-    sim <- identical(r$engine, "sim")
+    pos      <- function(x) is_num(x) && x > 0
+    sim      <- identical(r$engine, "sim")
+    same     <- isTRUE(r$same_prior)
+    one_sided <- !identical(r$alt, "two.sided")
+    fam      <- scale_family(r$otype, r$measure)
 
     validate(
-      need(is_num(r$design_mean), "Expected effect (design prior mean) must be a number."),
-      need(is_num(r$design_sd) && r$design_sd > 0, "Design prior SD must be a positive number."),
-      need(isTRUE(r$same_prior) || is_num(r$analysis_mean), "Analysis prior mean must be a number."),
-      need(isTRUE(r$same_prior) || (is_num(r$analysis_sd) && r$analysis_sd > 0),
-           "Analysis prior SD must be a positive number."),
-      need(is_num(r$sigma) && r$sigma > 0, "Outcome standard deviation must be a positive number."),
+      need(r$otype %in% c("cont", "ancova", "binary", "surv"), "Choose an outcome type."),
+      # outcome-specific
+      need(!(r$otype %in% c("cont", "ancova")) || pos(r$sigma),
+           "Outcome standard deviation must be a positive number."),
+      need(r$otype != "ancova" || (is_num(r$rho) && r$rho >= 0 && r$rho <= 0.95),
+           "The baseline-outcome correlation must be between 0 and 0.95."),
+      need(r$otype != "binary" || (is_num(r$p_control) && r$p_control > 0 && r$p_control < 100),
+           "The control-group event rate must be between 0 and 100%."),
+      need(r$otype != "surv" || pos(r$surv_median),
+           "The control-group median time must be a positive number."),
+      need(r$otype != "surv" || (is_num(r$accrual) && r$accrual >= 0 &&
+                                 is_num(r$followup) && r$followup >= 0 &&
+                                 r$accrual + r$followup > 0),
+           "Recruitment and follow-up must be zero or positive, and not both zero."),
+      need(r$otype != "surv" || (is_num(r$loss_pct) && r$loss_pct >= 0 && r$loss_pct < 90),
+           "Loss to follow-up must be between 0 and 90%."),
+      # priors
+      need(fam != "additive" || is_num(r$design_mean), "Expected effect (design prior mean) must be a number."),
+      need(fam != "additive" || pos(r$design_sd), "Design prior SD must be a positive number."),
+      need(fam != "additive" || same || is_num(r$analysis_mean), "Analysis prior mean must be a number."),
+      need(fam != "additive" || same || pos(r$analysis_sd), "Analysis prior SD must be a positive number."),
+      need(fam != "rd" || (is_num(r$rd_design_mean) && abs(r$rd_design_mean) < 100),
+           "Expected risk difference must be between -100 and 100 percentage points."),
+      need(fam != "rd" || pos(r$rd_design_sd), "Risk difference SD must be a positive number."),
+      need(fam != "rd" || same || is_num(r$rd_analysis_mean), "Analysis prior mean must be a number."),
+      need(fam != "rd" || same || pos(r$rd_analysis_sd), "Analysis prior SD must be a positive number."),
+      need(fam != "ratio" || (pos(r$ratio_design_lo) && is_num(r$ratio_design_hi) &&
+                              r$ratio_design_hi > r$ratio_design_lo),
+           "The plausible range for the ratio needs 0 < From < To."),
+      need(fam != "ratio" || same || (pos(r$ratio_analysis_lo) && is_num(r$ratio_analysis_hi) &&
+                                      r$ratio_analysis_hi > r$ratio_analysis_lo),
+           "The analysis prior range for the ratio needs 0 < From < To."),
+      # success criterion
+      need(!one_sided || fam != "additive" || is_num(r$threshold), "The success threshold must be a number."),
+      need(!one_sided || fam != "rd" || (is_num(r$rd_threshold) && abs(r$rd_threshold) < 100),
+           "The success threshold must be between -100 and 100 percentage points."),
+      need(!one_sided || fam != "ratio" || pos(r$ratio_threshold),
+           "The success threshold for a ratio must be positive (1 = no effect)."),
+      need(is_num(r$alpha) && r$alpha > 0 && r$alpha < 1,
+           "Significance threshold must be between 0 and 1."),
+      # design
       need(is_whole(r$n_min) && r$n_min >= 2, "Minimum sample size must be a whole number of at least 2."),
       need(is_whole(r$n_max), "Maximum sample size must be a whole number."),
       need(is_whole(r$n_step) && r$n_step >= 1, "Step must be a whole number of at least 1."),
@@ -444,28 +159,21 @@ server <- function(input, output, session) {
       need(!is_num(r$n_max) || r$n_max <= 20000, "Maximum sample size is limited to 20,000 per group."),
       need(is_num(r$ratio) && r$ratio >= 0.1 && r$ratio <= 10,
            "Allocation ratio must be between 0.1 and 10."),
-      need(is_num(r$dropout) && r$dropout >= 0 && r$dropout < 90,
+      need(r$otype == "surv" || (is_num(r$dropout) && r$dropout >= 0 && r$dropout < 90),
            "Dropout must be between 0 and 90%."),
-      need(r$alt == "two.sided" || (is_num(r$margin) && r$margin >= 0),
-           "The clinically meaningful difference must be zero or positive."),
-      need(is_num(r$alpha) && r$alpha > 0 && r$alpha < 1,
-           "Significance threshold must be between 0 and 1."),
+      # computation
       need(!sim || (is_whole(r$mc_iter) && r$mc_iter >= 100),
            "Number of simulated trials must be a whole number of at least 100."),
       need(!sim || is_num(r$seed), "Random seed must be a number.")
     )
 
     p <- r
-    p$same_prior <- isTRUE(r$same_prior)
-    # When the checkbox is ticked the analysis prior is an exact copy of the
-    # design prior; otherwise the separate inputs are used.
-    if (p$same_prior) {
-      p$analysis_mean <- r$design_mean
-      p$analysis_sd   <- r$design_sd
-    }
-    p$margin  <- if (r$alt == "two.sided") 0 else r$margin
-    p$dropout <- r$dropout / 100
+    p$same_prior <- same
     p$show_exact <- isTRUE(r$show_exact)
+    p$p_control  <- if (is_num(r$p_control)) r$p_control / 100 else NA
+    p$loss       <- if (is_num(r$loss_pct)) r$loss_pct / 100 else 0
+    p$dropout    <- if (r$otype == "surv") 0 else r$dropout / 100
+    p$time_unit  <- trimws(r$time_unit %||% "")
 
     n_c <- seq(r$n_min, r$n_max, by = r$n_step)
     if (utils::tail(n_c, 1) != r$n_max) n_c <- c(n_c, r$n_max)
@@ -474,24 +182,90 @@ server <- function(input, output, session) {
     p$n_c <- as.integer(n_c)
     p$n_t <- as.integer(treatment_n(n_c, r$ratio))
 
+    m <- build_model(p)
     if (sim) {
-      est <- estimate_seconds(p$n_t, p$n_c, r$mc_iter)
+      est <- p$mc_iter * sum(m$per_iter(p$n_t, p$n_c))
       validate(need(est <= 900, paste0(
         "This simulation would take roughly ", round(est / 60),
         " minutes. Reduce the maximum sample size, the number of sample ",
         "sizes, or the simulations per sample size, or use the exact engine.")))
     }
-    p
+    list(p = p, m = m)
+  })
+
+  # When the outcome type changes and the sample-size range is still the
+  # previous type's default, switch to the new type's default range.
+  observeEvent(input$otype, {
+    prev <- st$prev_otype
+    st$prev_otype <- input$otype
+    if (isTRUE(st$skip_n_defaults)) { st$skip_n_defaults <- FALSE; return() }
+    if (is.null(prev) || prev == input$otype) return()
+    now <- c(input$n_min, input$n_max, input$n_step)
+    if (length(now) == 3 && isTRUE(all(now == N_DEFAULTS[[prev]]))) {
+      d <- N_DEFAULTS[[input$otype]]
+      updateNumericInput(session, "n_min", value = d[1])
+      updateNumericInput(session, "n_max", value = d[2])
+      updateNumericInput(session, "n_step", value = d[3])
+    }
+  })
+
+  # ---- Live hints in the sidebar -----------------------------------------
+  live_model <- reactive(tryCatch(config()$m, error = function(e) NULL))
+
+  output$engine_note <- renderUI({
+    m <- live_model(); req(m)
+    tags$div(class = "form-text", "Simulation engine: ", m$engine_label,
+             ". Frequentist comparison: ", m$power_label, ".")
+  })
+
+  output$effect_hint <- renderUI({
+    m <- live_model(); req(m)
+    z <- qnorm(0.975)
+    lo <- m$m_d - z * m$s_d; hi <- m$m_d + z * m$s_d
+    txt <- switch(m$family,
+      additive = paste0("Effect = ", m$labels$short, " (treatment minus control). ",
+                        "Your design prior's 95% range: ", fmt_num(lo), " to ", fmt_num(hi), "."),
+      rd = paste0("Effect = treatment minus control event rate (percentage points; ",
+                  "negative = fewer events with treatment). Implied treatment-group ",
+                  "event rate: about ", fmt_pct(m$p_t(m$m_d), 0), " (95% range ",
+                  fmt_pct(m$p_t(lo), 0), " to ", fmt_pct(m$p_t(hi), 0), ")."),
+      ratio = paste0(
+        if (grepl("^[aeiou]", m$labels$short)) "An " else "A ", m$labels$short, " below 1 means ",
+        if (m$otype == "surv") "a lower event rate (longer time to event)" else "fewer events",
+        " with treatment. Your range implies a best guess of ", m$fmt_eff(m$m_d),
+        " (SD of the log ", m$labels$short, " ", fmt_num(m$s_d), ") and a ",
+        fmt_pct(pnorm(-m$m_d / m$s_d), 0), " chance that it is below 1.",
+        if (m$otype == "binary") paste0(" Implied treatment-group event rate: about ",
+                                        fmt_pct(m$p_t(m$m_d), 0), ".") else ""))
+    tagList(
+      div(class = "alert alert-light border py-2 px-2 small", txt),
+      if (isTRUE(m$prior_only_success))
+        div(class = "alert alert-danger py-2 px-2 small",
+            "Warning: with these priors the analysis would declare success even",
+            "without data. See the Results tab, or untick 'Analyse with the same",
+            "prior' and use a sceptical analysis prior."))
+  })
+
+  output$threshold_hint <- renderUI({
+    m <- live_model(); req(m, m$alt != "two.sided")
+    kind <- if (abs(m$C) < 1e-12) "ordinary superiority"
+            else if ((m$alt == "greater" && m$C < 0) || (m$alt == "less" && m$C > 0))
+              "a non-inferiority design"
+            else "superiority by a clinically meaningful margin"
+    tags$div(class = "form-text mb-2",
+             paste0("Success = showing the ", m$labels$short, " is ",
+                    if (m$alt == "greater") "above " else "below ",
+                    m$fmt_eff(m$C), " (", kind, ")."))
   })
 
   output$time_estimate <- renderUI({
-    p <- tryCatch(params(), error = function(e) NULL)
-    if (is.null(p)) return(NULL)
+    cfg <- tryCatch(config(), error = function(e) NULL)
+    if (is.null(cfg)) return(NULL)
+    p <- cfg$p
     txt <- if (p$engine == "sim") {
-      s <- estimate_seconds(p$n_t, p$n_c, p$mc_iter)
-      paste0("Estimated run time: ", if (s < 60) paste0("~", max(1, round(s)), " s")
-             else paste0("~", round(s / 60, 1), " min"),
-             " (", length(p$n_c), " sample sizes). Hosted servers may be slower.")
+      s <- p$mc_iter * sum(cfg$m$per_iter(p$n_t, p$n_c))
+      paste0("Estimated run time: ~", format_secs(s), " (", length(p$n_c),
+             " sample sizes). Hosted servers may be slower.")
     } else {
       paste0(length(p$n_c), " sample sizes; exact results are instant.")
     }
@@ -500,7 +274,7 @@ server <- function(input, output, session) {
 
   # ---- Main computation (runs on "Calculate", and once at start-up) -----
   # Why the simulation runs in chunks: R does one thing at a time, so a
-  # single long bayes_sim call would block this app completely. No button
+  # single long simulation call would block this app completely. No button
   # (not even a Stop button) could respond until it finished, and closing the
   # progress box would only hide it. Instead the simulation is split into
   # small chunks (see sim_chunk_plan) and a few are run per turn of Shiny's
@@ -510,8 +284,6 @@ server <- function(input, output, session) {
   run_error  <- reactiveVal(NULL)   # validation message from the last click
   running    <- reactiveVal(FALSE)
   progress   <- reactiveVal(list(frac = 0, detail = ""))
-  st <- new.env()                   # the running job (not reactive)
-  st$job <- NULL
 
   results <- reactive({
     if (!is.null(run_error())) validate(need(FALSE, run_error()))
@@ -520,70 +292,69 @@ server <- function(input, output, session) {
 
   # Everything except the simulation itself: exact assurance, power,
   # sample-size finder and ceiling. `assur` is NULL for the exact engine.
-  finish_run <- function(p, inputs_snapshot, assur, seconds) {
-    exact <- exact_assurance(p$n_t, p$n_c, p$design_mean, p$design_sd,
-                             p$analysis_mean, p$analysis_sd, p$sigma,
-                             p$alpha, p$alt, p$margin)
+  finish_run <- function(cfg, inputs_snapshot, assur, seconds) {
+    p <- cfg$p; m <- cfg$m
+    exact <- model_exact(m, p$n_t, p$n_c)
     if (is.null(assur)) {
       assur <- exact
       se <- NA_real_
     } else {
       se <- mc_se(assur, p$mc_iter)
     }
-    power <- freq_power(p$n_t, p$n_c, p$design_mean, p$sigma, p$alpha,
-                        p$alt, p$margin)
+    power <- model_power(m, p$n_t, p$n_c)
+    events <- if (is.null(m$events)) NA_real_ else m$events(m$m_d, p$n_t, p$n_c)
 
     # Sample size needed for the target (exact formulas, no noise)
-    f_assur <- function(nt, nc) exact_assurance(nt, nc, p$design_mean,
-      p$design_sd, p$analysis_mean, p$analysis_sd, p$sigma, p$alpha, p$alt,
-      p$margin)
-    f_power <- function(nt, nc) freq_power(nt, nc, p$design_mean, p$sigma,
-                                           p$alpha, p$alt, p$margin)
     k <- length(p$n_c)
-    parts <- exact_assurance(p$n_t[k], p$n_c[k], p$design_mean, p$design_sd,
-                             p$analysis_mean, p$analysis_sd, p$sigma, p$alpha,
-                             p$alt, p$margin, parts = TRUE)
+    parts <- model_exact(m, p$n_t[k], p$n_c[k], parts = TRUE)
     metrics <- list(
-      n_assur = smallest_n(f_assur, p$ratio, p$target),
-      n_power = smallest_n(f_power, p$ratio, p$target),
-      ceiling = assurance_ceiling(p$design_mean, p$design_sd, p$alt, p$margin),
+      n_assur = smallest_n(function(nt, nc) model_exact(m, nt, nc), p$ratio, p$target),
+      n_power = smallest_n(function(nt, nc) model_power(m, nt, nc), p$ratio, p$target),
+      ceiling = model_ceiling(m),
       # two-sided: share of success in the direction opposite to the expected one
-      neg_share = if (p$design_mean >= 0) parts$negative else parts$positive
+      neg_share = if (m$m_d >= 0) parts$negative else parts$positive
     )
 
     results_rv(list(
-      p = p, inputs = inputs_snapshot, metrics = metrics, seconds = seconds,
+      p = p, model = m, inputs = inputs_snapshot, metrics = metrics,
+      seconds = seconds,
       table = data.frame(n_t = p$n_t, n_c = p$n_c, assurance = assur,
-                         mc_se = se, exact = exact, power = power)))
+                         mc_se = se, exact = exact, power = power,
+                         events = events)))
   }
 
   # Start (or restart) a run. ignoreNULL = FALSE also runs it at start-up.
   observeEvent(input$go, {
+    # Results on tabs that don't show them would appear to "do nothing".
+    if (!is.null(input$go) && input$go > 0 &&
+        isTRUE(input$tabs %in% c("LLM prompt helper", "Compare scenarios", "Methods & help"))) {
+      nav_select("tabs", "Results")
+    }
     st$job <- NULL                       # cancel any run in progress
-    p <- tryCatch(params(), error = function(e) e)
-    if (inherits(p, "error")) {
+    cfg <- tryCatch(config(), error = function(e) e)
+    if (inherits(cfg, "error")) {
       running(FALSE)
-      run_error(conditionMessage(p))
+      run_error(conditionMessage(cfg))
       return()
     }
     run_error(NULL)
-    snapshot <- raw_inputs()
+    snapshot <- relevant_inputs(raw_inputs())
+    p <- cfg$p; m <- cfg$m
 
     if (p$engine == "exact") {
       running(FALSE)
-      finish_run(p, snapshot, NULL, 0)
+      finish_run(cfg, snapshot, NULL, 0)
       return()
     }
 
-    plan <- sim_chunk_plan(p$n_t, p$n_c, p$mc_iter)
-    per_iter <- vapply(seq_along(p$n_t), function(i)
-      estimate_seconds(p$n_t[i], p$n_c[i], 1), numeric(1))
+    per_iter <- m$per_iter(p$n_t, p$n_c)
+    plan <- sim_chunk_plan(per_iter, p$mc_iter, max_chunk = m$max_chunk(p$n_t, p$n_c))
     plan$cost <- plan$iters * per_iter[plan$i]
 
     # The run gets its own random-number stream, saved between chunks, so
     # nothing else that uses random numbers in the meantime (e.g. drawing a
     # plot on another tab) can change the results for a given seed.
-    st$job <- list(p = p, inputs = snapshot, plan = plan, next_chunk = 1L,
+    st$job <- list(cfg = cfg, inputs = snapshot, plan = plan, next_chunk = 1L,
                    successes = numeric(length(p$n_c)),
                    rng = with_seed_state(NULL, function() { set.seed(p$seed); NULL })$state,
                    t0 = Sys.time())
@@ -596,15 +367,13 @@ server <- function(input, output, session) {
     req(running())
     j <- st$job
     if (is.null(j)) { running(FALSE); return() }
-    p <- j$p
+    p <- j$cfg$p; m <- j$cfg$m
     tick_start <- Sys.time()
 
     step <- tryCatch(with_seed_state(j$rng, function() {
       repeat {
         ch <- j$plan[j$next_chunk, ]
-        est <- sim_assurance(p$n_t[ch$i], p$n_c[ch$i], p$design_mean,
-                             p$design_sd, p$analysis_mean, p$analysis_sd,
-                             p$sigma, p$alpha, p$alt, p$margin, ch$iters)
+        est <- m$sim(m, p$n_t[ch$i], p$n_c[ch$i], ch$iters)
         j$successes[ch$i] <- j$successes[ch$i] + est * ch$iters
         j$next_chunk <- j$next_chunk + 1L
         if (j$next_chunk > nrow(j$plan) ||
@@ -631,7 +400,7 @@ server <- function(input, output, session) {
     if (j$next_chunk > nrow(j$plan)) {
       st$job <- NULL
       running(FALSE)
-      finish_run(p, j$inputs, j$successes / p$mc_iter, elapsed)
+      finish_run(j$cfg, j$inputs, j$successes / p$mc_iter, elapsed)
     } else {
       st$job <- j
       done <- j$next_chunk - 1L
@@ -676,7 +445,9 @@ server <- function(input, output, session) {
 
   output$stale <- renderUI({
     res <- tryCatch(results(), error = function(e) NULL)
-    if (running() || is.null(res) || identical(raw_inputs(), res$inputs)) return(NULL)
+    if (running() || is.null(res)) return(NULL)
+    now <- tryCatch(relevant_inputs(raw_inputs()), error = function(e) NULL)
+    if (identical(now, res$inputs)) return(NULL)
     div(class = "alert alert-warning py-2 px-3 my-2 small",
         "Inputs have changed. Press Calculate to update the results.")
   })
@@ -685,6 +456,10 @@ server <- function(input, output, session) {
   last_row <- reactive({ t <- results()$table; t[nrow(t), ] })
   n_text <- function(nt, nc) if (nt == nc) paste0("n = ", nc, " per group")
                              else paste0("n = ", nt, " / ", nc, " (T / C)")
+  events_note <- function(m, n_c, ratio) {
+    if (is.null(m$events) || is.na(n_c)) return("")
+    paste0(" (~", fmt_num(round(m$events(m$m_d, treatment_n(n_c, ratio), n_c))), " events)")
+  }
 
   output$vb_assur_title <- renderText(paste0("Bayesian assurance at ",
     n_text(last_row()$n_t, last_row()$n_c)))
@@ -699,23 +474,34 @@ server <- function(input, output, session) {
     if (is.na(n)) "Not reachable" else format(n, big.mark = ",")
   })
   output$vb_n_sub <- renderText({
-    res <- results(); n <- res$metrics$n_power
-    paste0("For ", fmt_pct(res$p$target, 0), " power: ",
-           if (is.na(n)) "not reachable" else format(n, big.mark = ","))
+    res <- results(); mt <- res$metrics
+    ev <- if (!is.na(mt$n_assur)) trimws(events_note(res$model, mt$n_assur, res$p$ratio)) else ""
+    paste0(if (nzchar(ev)) paste0(gsub("[()]", "", ev), "; ") else "",
+           "For ", fmt_pct(res$p$target, 0), " power: ",
+           if (is.na(mt$n_power)) "not reachable"
+           else paste0(format(mt$n_power, big.mark = ","),
+                       events_note(res$model, mt$n_power, res$p$ratio)))
   })
   output$vb_ceiling <- renderText(fmt_pct(results()$metrics$ceiling))
+
+  output$model_warnings <- renderUI({
+    w <- results()$model$warnings
+    if (length(w)) div(class = "alert alert-warning py-2 small", lapply(w, tags$div))
+  })
 
   # ---- Main plot, summary, table -------------------------------------------
   output$curve <- renderPlotly(plot_curve_plotly(results()))
   output$curve_note <- renderText({
-    res <- results()
+    res <- results(); m <- res$model
     if (res$p$engine == "sim") {
-      paste0("Assurance simulated with bayesassurance::bayes_sim_unbalanced (",
+      paste0("Assurance simulated with ", m$engine_label, " (",
              format(res$p$mc_iter, big.mark = ","), " trials per sample size, seed ",
              res$p$seed, ", ", round(res$seconds, 1), " s). Shaded band: 95% ",
-             "Monte Carlo interval. Power: two-sample t-test.")
+             "Monte Carlo interval. Power: ", m$power_label, ".")
     } else {
-      "Assurance from the exact closed-form formula. Power: two-sample t-test."
+      paste0("Assurance from the exact formula", if (!m$const_var)
+        " (numerical integration over the design prior)" else "",
+        ". Power: ", m$power_label, ".")
     }
   })
 
@@ -734,9 +520,10 @@ server <- function(input, output, session) {
     if (p$dropout > 0) {
       d[["Total to enrol"]] <- enrolled_n(t$n_t, p$dropout) + enrolled_n(t$n_c, p$dropout)
     }
+    if (!all(is.na(t$events))) d[["Expected events"]] <- round(t$events)
     d[["Bayesian assurance"]] <- t$assurance
     if (p$engine == "sim") {
-      d[["\u00B1 95% MC error"]] <- 1.96 * t$mc_se
+      d[["MC error (95%)"]] <- 1.96 * t$mc_se
       d[["Exact assurance"]] <- t$exact
     }
     d[["Frequentist power"]] <- t$power
@@ -745,7 +532,7 @@ server <- function(input, output, session) {
 
   output$results_table <- renderDT({
     d <- display_table()
-    pct_cols <- intersect(names(d), c("Bayesian assurance", "\u00B1 95% MC error",
+    pct_cols <- intersect(names(d), c("Bayesian assurance", "MC error (95%)",
                                       "Exact assurance", "Frequentist power"))
     datatable(d, rownames = FALSE, class = "compact stripe hover",
               options = list(dom = "t", paging = FALSE, scrollY = "360px",
@@ -763,7 +550,7 @@ server <- function(input, output, session) {
     content = function(file) {
       t <- results()$table
       names(t) <- c("n_treatment", "n_control", "assurance", "assurance_mc_se",
-                    "assurance_exact", "frequentist_power")
+                    "assurance_exact", "frequentist_power", "expected_events")
       utils::write.csv(t, file, row.names = FALSE)
     })
 
@@ -777,27 +564,16 @@ server <- function(input, output, session) {
   output$dl_report <- downloadHandler(
     filename = function() paste0("assurance-report-", stamp(), ".txt"),
     content = function(file) {
-      res <- results(); p <- res$p
-      alt_txt <- c(two.sided = "two-sided", greater = "one-sided, treatment > control",
-                   less = "one-sided, treatment < control")[[p$alt]]
+      res <- results()
       lines <- c(
         "AssuRance report",
         paste("Generated:", format(Sys.time(), "%Y-%m-%d %H:%M")),
         "",
         "INPUTS",
-        sprintf("  Design prior:    N(mean = %s, SD = %s)", p$design_mean, p$design_sd),
-        sprintf("  Analysis prior:  N(mean = %s, SD = %s)%s", p$analysis_mean,
-                p$analysis_sd, if (p$same_prior) "  [same as design prior]" else ""),
-        sprintf("  Outcome SD:      %s", p$sigma),
-        sprintf("  Test:            %s, alpha = %s%s", alt_txt, p$alpha,
-                if (p$margin > 0) paste0(", margin = ", p$margin) else ""),
-        sprintf("  Allocation:      %s : 1 (treatment : control)", p$ratio),
-        sprintf("  Dropout:         %s%%", 100 * p$dropout),
-        sprintf("  Target:          %s", fmt_pct(p$target, 0)),
-        sprintf("  Engine:          %s", if (p$engine == "sim")
-          paste0("bayesassurance simulation, ", p$mc_iter, " trials per n, seed ", p$seed)
-          else "exact closed-form formula"),
+        describe_inputs(res$p, res$model),
         "",
+        if (length(res$model$warnings))
+          c("WARNINGS", strwrap(res$model$warnings, width = 78, prefix = "  ", initial = "  "), ""),
         "SUMMARY",
         strwrap(build_summary(res), width = 78, prefix = "  ", initial = "  "),
         "",
@@ -811,29 +587,43 @@ server <- function(input, output, session) {
     })
 
   # ---- Priors tab -------------------------------------------------------------
-  output$prior_plot <- renderPlotly(plot_priors(results()$p))
+  output$prior_plot <- renderPlotly(plot_priors(results()$model))
   output$prior_text <- renderUI({
-    p <- results()$p
-    pos <- 1 - pnorm(0, p$design_mean, p$design_sd)
+    res <- results(); m <- res$model; p <- res$p
+    z <- qnorm(0.975)
+    up <- 1 - pnorm(-m$m_d / m$s_d)
     items <- list(
-      tags$li(paste0("Under your design prior there is a ", fmt_pct(pos),
-                     " chance that treatment is truly better than control ",
-                     "(effect above 0), and a ", fmt_pct(1 - pos),
-                     " chance that it is not.")),
+      tags$li(paste0("Under your design prior there is a ", fmt_pct(up),
+                     " chance that treatment increases ", m$labels$thing,
+                     " and a ", fmt_pct(1 - up), " chance that it reduces it.")),
       tags$li(paste0("95% of the effects you consider plausible lie between ",
-                     fmt_num(p$design_mean - 1.96 * p$design_sd), " and ",
-                     fmt_num(p$design_mean + 1.96 * p$design_sd), ".")))
-    if (p$alt != "two.sided") {
+                     m$fmt_eff(m$m_d - z * m$s_d), " and ",
+                     m$fmt_eff(m$m_d + z * m$s_d), " (", m$labels$short, ").")))
+    if (p$otype == "binary") {
       items <- c(items, list(tags$li(paste0(
-        "The shaded area (", fmt_pct(results()$metrics$ceiling), ") is the ",
-        "probability that the true effect is large enough to count as a ",
-        "success. This is also the assurance ceiling."))))
+        "With a control-group event rate of ", fmt_pct(p$p_control, 0),
+        ", the design prior's centre corresponds to a treatment-group rate of about ",
+        fmt_pct(m$p_t(m$m_d)), "."))))
+    }
+    if (p$otype == "surv") {
+      items <- c(items, list(tags$li(paste0(
+        "About ", fmt_pct(m$pev_c, 0), " of control-group participants are ",
+        "expected to have an event by the analysis (", fmt_num(p$accrual), " ",
+        m$time_unit, " of recruitment plus ", fmt_num(p$followup), " of follow-up), ",
+        "and about ", fmt_pct(m$pev(log(2) / p$surv_median * exp(m$m_d)), 0),
+        " of treatment-group participants at the design prior's centre."))))
+    }
+    if (m$alt != "two.sided") {
+      items <- c(items, list(tags$li(paste0(
+        "The shaded area (", fmt_pct(res$metrics$ceiling), ") is the ",
+        "probability that the true effect is beyond the success threshold. ",
+        "This is also the assurance ceiling."))))
     }
     if (!p$same_prior) {
       items <- c(items, list(tags$li(paste0(
-        "The analysis prior N(", fmt_num(p$analysis_mean), ", ",
-        fmt_num(p$analysis_sd), "\u00B2) will be combined with the trial data. ",
-        if (p$analysis_sd > 5 * p$sigma) "It is vague, so the data will dominate."
+        "The analysis prior (", describe_prior(m, "analysis"), ") will be ",
+        "combined with the trial data. ",
+        if (m$s_a > 5 * m$s_d) "It is much wider than your design prior, so the data will dominate."
         else "It is informative, so it will pull results towards its centre."))))
     }
     tags$ul(class = "mt-3", items)
@@ -845,19 +635,37 @@ server <- function(input, output, session) {
                   "Enter a sample size of at least 2."))
     as.integer(round(x))
   }
-  output$cond_plot <- renderPlotly(plot_conditional(results()$p, focus_n(input$cond_n)))
+  output$cond_plot <- renderPlotly({
+    res <- results()
+    plot_conditional(res$model, focus_n(input$cond_n), res$p$ratio)
+  })
   output$cond_text <- renderUI({
-    p <- results()$p; n_c <- focus_n(input$cond_n); n_t <- treatment_n(n_c, p$ratio)
-    a <- exact_assurance(n_t, n_c, p$design_mean, p$design_sd, p$analysis_mean,
-                         p$analysis_sd, p$sigma, p$alpha, p$alt, p$margin)
-    pw <- freq_power(n_t, n_c, p$design_mean, p$sigma, p$alpha, p$alt, p$margin)
-    p(strong(paste0("At ", n_text(n_t, n_c), ": exact assurance ", fmt_pct(a),
-                    ", frequentist power ", fmt_pct(pw), ".")))
+    res <- results(); m <- res$model
+    n_c <- focus_n(input$cond_n); n_t <- treatment_n(n_c, res$p$ratio)
+    a  <- model_exact(m, n_t, n_c)
+    pw <- model_power(m, n_t, n_c)
+    p(strong(paste0("At ", n_text(n_t, n_c), events_note(m, n_c, res$p$ratio),
+                    ": exact assurance ", fmt_pct(a), ", frequentist power ",
+                    fmt_pct(pw), ".")))
   })
 
   # ---- Sensitivity tab ---------------------------------------------------------
-  output$sens_heat <- renderPlotly(plot_sensitivity_heat(results()$p, focus_n(input$sens_n)))
-  output$sens_asd  <- renderPlotly(plot_sensitivity_analysis_sd(results()$p, focus_n(input$sens_n)))
+  output$sens_heat <- renderPlotly({
+    res <- results()
+    plot_sensitivity_heat(res$model, focus_n(input$sens_n), res$p$ratio,
+                          res$p$same_prior,
+                          len = if (res$model$const_var) 41 else 25)
+  })
+  output$sens_asd <- renderPlotly({
+    res <- results()
+    plot_sensitivity_analysis_sd(res$model, focus_n(input$sens_n), res$p$ratio)
+  })
+  output$sens_nuis_title <- renderText(paste0("Assurance across values of: ",
+                                              results()$model$nuisance$label))
+  output$sens_nuis <- renderPlotly({
+    res <- results()
+    plot_sensitivity_nuisance(res$p, res$model, focus_n(input$sens_n))
+  })
 
   # ---- Scenario comparison -----------------------------------------------------
   scenarios <- reactiveVal(list())
@@ -872,8 +680,8 @@ server <- function(input, output, session) {
     }
     label <- trimws(input$scenario_label)
     if (!nzchar(label)) label <- paste("Scenario", length(s) + 1)
-    s[[length(s) + 1]] <- list(label = label, p = res$p, table = res$table,
-                               metrics = res$metrics)
+    s[[length(s) + 1]] <- list(label = label, p = res$p, model = res$model,
+                               table = res$table, metrics = res$metrics)
     scenarios(s)
     updateTextInput(session, "scenario_label", value = "")
     showNotification(paste0("Saved \"", label, "\". See the Compare scenarios tab."),
@@ -888,7 +696,8 @@ server <- function(input, output, session) {
     if (length(scenarios()) == 0)
       div(class = "alert alert-info",
           "No scenarios saved yet. Run a calculation, then use \"Save scenario\"",
-          "on the Results tab. Save a few with different assumptions to compare them here.")
+          "on the Results tab. Save a few with different assumptions (or even",
+          "different outcome types) to compare them here.")
   })
   output$cmp_plot <- renderPlotly({
     req(length(scenarios()) > 0)
@@ -897,16 +706,13 @@ server <- function(input, output, session) {
   output$cmp_table <- renderTable({
     s <- scenarios(); req(length(s) > 0)
     do.call(rbind, lapply(s, function(x) {
-      p <- x$p; last <- x$table[nrow(x$table), ]
+      p <- x$p; m <- x$model; last <- x$table[nrow(x$table), ]
       data.frame(
         Scenario = x$label,
-        "Design prior" = sprintf("mean %s, SD %s", fmt_num(p$design_mean), fmt_num(p$design_sd)),
-        "Analysis prior" = if (p$same_prior) "same" else
-          sprintf("mean %s, SD %s", fmt_num(p$analysis_mean), fmt_num(p$analysis_sd)),
-        "Outcome SD" = fmt_num(p$sigma),
-        Test = paste0(c(two.sided = "2-sided", greater = "T > C", less = "T < C")[[p$alt]],
-                      if (p$margin > 0) paste0(", margin ", fmt_num(p$margin)) else "",
-                      ", alpha = ", p$alpha),
+        Outcome = m$describe,
+        "Design prior" = describe_prior(m, "design"),
+        "Analysis prior" = if (p$same_prior) "same" else describe_prior(m, "analysis"),
+        Test = describe_test(m),
         Ratio = p$ratio,
         "Largest n (T / C)" = paste0(last$n_t, " / ", last$n_c),
         "Assurance there" = fmt_pct(last$assurance),
@@ -919,11 +725,19 @@ server <- function(input, output, session) {
   }, striped = TRUE, spacing = "s")
 
   # ---- LLM prompt helper --------------------------------------------------
+  output$pg_type_note <- renderUI({
+    div(class = "alert alert-info py-2 small",
+        "The prompt is written for the outcome type selected in the sidebar: ",
+        strong(outcome_type_label(input$otype, input$measure)),
+        ". Change it there first if needed.")
+  })
+
   # Current app inputs, renamed to the JSON field names used in the prompt.
   current_for_llm <- function() {
     r <- raw_inputs()
-    v <- r[intersect(names(r), names(LLM_FIELDS))]
-    v$dropout_percent <- r$dropout
+    keys <- llm_keys_for(input$otype, input$measure)
+    v <- r[intersect(keys, names(r))]
+    if ("dropout_percent" %in% keys) v$dropout_percent <- r$dropout
     v[vapply(v, function(x) length(x) == 1 && !is.na(x), logical(1))]
   }
 
@@ -936,7 +750,8 @@ server <- function(input, output, session) {
       setting = input$pg_setting, mcid = input$pg_mcid,
       known = input$pg_known, constraints = input$pg_constraints,
       web = input$pg_web, language = input$pg_language)
-    build_llm_prompt(info, if (isTRUE(input$pg_current)) current_for_llm())
+    build_llm_prompt(info, if (isTRUE(input$pg_current)) current_for_llm(),
+                     otype = input$otype, measure = input$measure)
   }) |> debounce(400)
 
   output$pg_prompt <- renderText(llm_prompt())
@@ -947,16 +762,13 @@ server <- function(input, output, session) {
   observeEvent(input$pg_apply, {
     parsed <- parse_llm_values(input$pg_answer)
     v <- parsed$values
-    labels <- c(design_mean = "Design prior mean", design_sd = "Design prior SD",
-                same_prior = "Analyse with the same prior",
-                analysis_mean = "Analysis prior mean", analysis_sd = "Analysis prior SD",
-                sigma = "Outcome SD", n_min = "Min n", n_max = "Max n", n_step = "Step",
-                ratio = "Allocation ratio", dropout_percent = "Dropout (%)",
-                alt = "Test direction", margin = "Margin", alpha = "Alpha",
-                target = "Target")
+    if (!is.null(v$otype) && v$otype != input$otype) st$skip_n_defaults <- TRUE
     for (k in names(v)) {
       val <- v[[k]]
       switch(k,
+        otype           = updateSelectInput(session, "otype", selected = val),
+        measure         = updateRadioButtons(session, "measure", selected = val),
+        time_unit       = updateTextInput(session, "time_unit", value = val),
         same_prior      = updateCheckboxInput(session, "same_prior", value = val),
         alt             = updateRadioButtons(session, "alt", selected = val),
         target          = updateSliderInput(session, "target", value = val),
@@ -973,7 +785,7 @@ server <- function(input, output, session) {
             tags$table(class = "table table-sm small",
               tags$thead(tags$tr(tags$th("Input"), tags$th("Value"))),
               tags$tbody(lapply(names(v), function(k)
-                tags$tr(tags$td(labels[[k]]), tags$td(format(v[[k]]))))))
+                tags$tr(tags$td(LLM_FIELDS[[k]]$label), tags$td(format(v[[k]]))))))
           )
         },
         if (length(parsed$messages))

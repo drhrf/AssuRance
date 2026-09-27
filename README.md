@@ -1,7 +1,7 @@
 # AssuRance
 
-**Bayesian assurance vs. frequentist power for two-arm clinical trials with a
-continuous outcome.**
+**Bayesian assurance vs. frequentist power for two-arm clinical trials with
+continuous, baseline-adjusted, binary or time-to-event outcomes.**
 
 > **Live app:** _coming soon_
 
@@ -12,28 +12,52 @@ likely is this trial to succeed?":
 - **Bayesian assurance** (also called the probability of success) averages the
   chance of success over every effect size you consider plausible.
 
-The Bayesian calculations use the
+For continuous outcomes the simulations run on the
 [`bayesassurance`](https://github.com/jpan928/bayesassurance_rpackage) R
-package.
+package. Binary and time-to-event outcomes use the app's own simulators, for
+the reasons given under [Method notes](#method-notes).
 
 ![Results tab](docs/screenshot-results.png)
 
 ## Features
 
+- **Four outcome types:**
+
+  | Outcome | Effect measure | Extra inputs |
+  | --- | --- | --- |
+  | Continuous | difference in means | outcome SD |
+  | Continuous, adjusted for baseline (ANCOVA) | adjusted difference in means | outcome SD, baseline-outcome correlation |
+  | Binary | odds ratio, risk ratio or risk difference | control-group event rate |
+  | Time to event | hazard ratio | control median, recruitment period, follow-up, loss to follow-up |
+
+  Priors on ratios are entered as a plausible 95% range, such as "the hazard
+  ratio is between 0.6 and 1.0". For time-to-event and binary outcomes the
+  app also reports the **expected number of events**.
 - **Separate design and analysis priors.** The design prior is what you
   believe and is used to simulate trials. The analysis prior is what the final
   analysis will use. You can make them identical with one click.
 - **Assurance and power curves** across a range of sample sizes, with a
   target line and 95% Monte Carlo bands for the simulated values.
-- **Two engines.** Simulation with
-  `bayesassurance::bayes_sim_unbalanced()` is the default. The exact
-  closed-form formula is instant and can also be overlaid as a check.
+- **Two engines.** Simulation of virtual trials is the default; the exact
+  engine is instant and can also be overlaid as a check.
+  - **Simulation:** continuous outcomes run through
+    `bayesassurance::bayes_sim_unbalanced()`, including a full ANCOVA
+    regression with a simulated baseline covariate. Binary outcomes simulate
+    binomial counts, and time-to-event outcomes simulate patient-level
+    survival data with staggered recruitment and censoring.
+  - **Exact:** uses closed-form formulas, or numerical integration for binary
+    and time-to-event outcomes.
 - **Sample-size finder.** It finds the smallest sample size that reaches your
   target assurance or power. It also shows the **assurance ceiling**, the
   highest assurance any sample size can reach, and tells you when your target
   is out of reach.
-- **Flexible success rule.** You can use one- or two-sided tests and require
-  the effect to exceed a clinically meaningful difference (margin).
+- **Flexible success rule.** You can use one- or two-sided tests. The
+  success threshold can require a clinically meaningful effect, or set up a
+  **non-inferiority** design, for example showing a hazard ratio below 1.3.
+- **Safety checks.** The app warns you when the analysis prior alone would
+  already declare success, which typically happens when an optimistic design
+  prior is reused for the analysis. It also warns when a risk-ratio or
+  risk-difference prior implies impossible event rates.
 - **Unequal allocation** (for example, 2:1) and **dropout**: the app reports
   how many people to enrol.
 - **A plain-language summary** for non-statisticians. It flags a gap of more
@@ -44,9 +68,12 @@ package.
   that count as a success.
 - **Success vs true effect tab.** It shows how assurance averages the success
   probability over the design prior.
-- **Sensitivity tab.** Heat map of assurance across design-prior means and
-  SDs, and a curve of assurance against the analysis-prior SD.
-- **Compare scenarios.** Save up to 8 runs and overlay them.
+- **Sensitivity tab.** Heat map of assurance across design priors, a curve
+  of assurance against the analysis-prior SD, and a curve against the
+  outcome-specific assumption: the outcome SD, the baseline correlation, the
+  control-group event rate or the control-group median survival.
+- **Compare scenarios.** Save up to 8 runs, even with different outcome
+  types, and overlay them.
 - **Downloads and sharing.** CSV table, PNG plot, a text report, and a
   bookmark link that restores all inputs.
 - **LLM prompt helper.** Describe your project (condition, intervention,
@@ -56,6 +83,8 @@ package.
   block. Paste the answer back and the app fills in its inputs, skipping any
   value that isn't valid. Always check the numbers and references it gives.
 - A **Methods & help** tab with formulas and references.
+
+![Time-to-event outcome](docs/screenshot-survival.png)
 
 ![Success vs true effect](docs/screenshot-success-vs-effect.png)
 
@@ -90,7 +119,7 @@ package.
 5. With `app.R` open, click the blue **Publish** icon at the top right of the
    editor pane. In a Posit Cloud project, the dialog is already set up to
    publish to Posit Cloud.
-   - Make sure `app.R` and all five files in `R/` are ticked. `tests/`,
+   - Make sure `app.R` and every file in the `R/` folder are ticked. `tests/`,
      `docs/`, `setup.R` and this README aren't needed (a `.rscignore` file
      leaves them out).
    - Give it a title, such as *AssuRance*, and click **Publish**.
@@ -121,43 +150,80 @@ the same.
 
 | File | Purpose |
 | --- | --- |
-| `app.R` | User interface and server logic |
-| `R/calculations.R` | Statistical engine; documents how the inputs map onto `bayesassurance`'s parameters |
+| `app.R` | Server logic |
+| `R/ui_sidebar.R`, `R/ui_tabs.R` | User interface: sidebar inputs, and the main panel and tabs |
+| `R/calculations.R` | Outcome-agnostic engine: success rule, exact assurance, power, sample-size finder, chunked simulation, and the documented mapping onto `bayesassurance`'s parameters |
+| `R/models.R` | One model per outcome type: variances, simulators, power, labels |
 | `R/summary_text.R` | Plain-language summary |
 | `R/plots.R` | Plot builders (plotly for the screen, ggplot2 for PNG export) |
 | `R/methods_ui.R` | Content of the *Methods & help* tab |
 | `R/prompt_generator.R` | Builds the prompt for the LLM helper and reads its JSON answer |
-| `tests/test_calculations.R` | Checks the simulation against the exact formula, and power against `power.t.test` |
+| `tests/test_calculations.R` | Checks the `bayesassurance` simulation against the exact formula, power against `power.t.test`, and the chunked simulation |
+| `tests/test_models.R` | Checks simulation against exact assurance for every outcome type, plus the survival and binary building blocks |
 | `tests/test_prompt_generator.R` | Checks the prompt builder and the JSON answer parser |
 | `setup.R` | Installs the required packages |
 
-Run the tests with `Rscript tests/test_calculations.R` (about a minute) and
+Run the tests from the project folder with `Rscript tests/test_calculations.R`
+(about a minute), `Rscript tests/test_models.R` (about 10 seconds) and
 `Rscript tests/test_prompt_generator.R` (instant).
 
 ## Method notes
 
-- **Model.** Outcomes are normal with a known common SD σ. The treatment
-  effect Δ = μ<sub>T</sub> − μ<sub>C</sub> has a design prior
-  N(m<sub>d</sub>, s<sub>d</sub>²) and an analysis prior
-  N(m<sub>a</sub>, s<sub>a</sub>²). A trial succeeds when the posterior
-  probability that Δ exceeds the margin (in the tested direction) is greater
-  than 1 − α, or 1 − α/2 per tail for a two-sided test.
+- **Common framework.** Each outcome type is reduced to an effect θ on a
+  scale where its estimate is approximately normal:
+  - the difference in means, for continuous outcomes
+  - the log odds ratio, log risk ratio or risk difference, for binary outcomes
+  - the log hazard ratio, for time-to-event outcomes
+
+  θ has a design prior and an analysis prior. A trial succeeds when the
+  posterior probability that θ is beyond the threshold, in the tested
+  direction, is greater than 1 − α, or 1 − α/2 per tail for a two-sided test.
+- **Variances.**
+  - **Continuous:** σ²(1/n<sub>T</sub> + 1/n<sub>C</sub>).
+  - **ANCOVA:** the same multiplied by (1 − ρ²), and slightly inflated
+    because the slope is estimated.
+  - **Binary:** delta-method variances at the true event rates.
+  - **Time to event:** 1/D<sub>T</sub> + 1/D<sub>C</sub>, where D is the
+    expected number of events. D comes from exponential survival with uniform
+    recruitment, administrative censoring and loss to follow-up.
+
+  When the variance depends on θ (binary and time-to-event outcomes), the
+  exact engine integrates over the design prior numerically.
 - **Package mapping.** `bayesassurance` expresses prior variances relative to
   σ², so a prior SD *s* enters as *s*²/σ². The analysis prior is placed only
-  on the treatment–control contrast, with a flat prior on the common level.
-  `R/calculations.R` spells this out step by step.
-- **Why not `assurance_nd_na()`?** The package's closed-form function ties
-  the analysis prior mean to the null value, and it doesn't match the exact
-  assurance when the analysis prior is informative. The app uses the
-  simulation functions, plus its own verified closed form.
-- **Power.** The app uses two-sample t-test power (noncentral t), which is
-  identical to `stats::power.t.test()` for equal groups and extends it to
-  unequal groups and a margin.
+  on the treatment–control contrast, with a flat prior on the common level
+  (and on the baseline slope, for ANCOVA). `R/calculations.R` spells this out
+  step by step.
+- **Package functions not used:**
+  - **`assurance_nd_na()`** (closed form) ties the analysis prior mean to the
+    null value, and doesn't match the exact assurance when the analysis prior
+    is informative.
+  - **`bayes_sim_betabin()`** (binary) draws the true proportions only once
+    per call, so it doesn't average over the design prior.
+  - **`bayes_sim_unknownvar()`** builds a covariance matrix of the wrong size
+    for two-group designs.
+  - The package has no survival functions.
+- **Power.** Continuous outcomes use t-test power: two-sample, or ANCOVA with
+  N − 3 degrees of freedom, identical to `stats::power.t.test()` for equal
+  groups. Binary and time-to-event outcomes use a Wald z-test on the working
+  scale.
+- **Limitations.** Nuisance values (outcome SD, correlation, control-group
+  event rate, control median) are treated as known; the Sensitivity tab shows
+  how much they matter. The survival model assumes exponential event times
+  and proportional hazards. With very few events, trust the simulation over
+  the exact engine.
 
 ## References
 
 - O'Hagan A, Stevens JW, Campbell MJ (2005). Assurance in clinical trial
   design. *Pharmaceutical Statistics* 4(3):187–201.
+- Ren S, Oakley JE (2014). Assurance calculations for planning clinical
+  trials with time-to-event outcomes. *Statistics in Medicine* 33(1):31–45.
+- Schoenfeld DA (1983). Sample-size formula for the proportional-hazards
+  regression model. *Biometrics* 39(2):499–503.
+- Borm GF, Fransen J, Lemmens WA (2007). A simple sample size formula for
+  analysis of covariance in randomized clinical trials. *Journal of Clinical
+  Epidemiology* 60(12):1234–1238.
 - Pan J, Banerjee S (2023). bayesassurance: An R package for calculating
   sample size and Bayesian assurance. *The R Journal*.
   [RJ-2023-066](https://journal.r-project.org/articles/RJ-2023-066/)
