@@ -108,6 +108,17 @@ methods_ui <- function() {
       li2("Information about the effect's size: \\(\\tfrac12 \\log_2(1 + s_d^2/\\bar v)\\) bits, and the share of uncertainty removed \\(s_d^2/(s_d^2 + \\bar v)\\), where \\(\\bar v\\) is the variance of the estimate averaged over the design prior.",
           "Informa\u00e7\u00e3o sobre o tamanho do efeito: \\(\\tfrac12 \\log_2(1 + s_d^2/\\bar v)\\) bits, e a propor\u00e7\u00e3o de incerteza removida \\(s_d^2/(s_d^2 + \\bar v)\\), em que \\(\\bar v\\) \u00e9 a vari\u00e2ncia da estimativa em m\u00e9dia sobre a priori de planejamento.")),
 
+    h3_2("Complex designs (rough extrapolation)", "Desenhos complexos (extrapola\u00E7\u00E3o grosseira)"),
+    tp("The Complex design panel in the sidebar adds a card to the Results tab. It starts from the smallest sample size of the simple two-arm design, for each criterion (power, assurance, detection if real), and extrapolates it with textbook adjustments. It is meant for early planning, not as the final calculation for the complex design.",
+       "O painel Desenho complexo na barra lateral acrescenta um cart\u00E3o \u00E0 aba Resultados. Ele parte do menor tamanho amostral do desenho simples de dois bra\u00E7os, para cada crit\u00E9rio (poder, assurance, detec\u00E7\u00E3o se real), e o extrapola com ajustes cl\u00E1ssicos. Serve para o planejamento inicial, n\u00E3o como o c\u00E1lculo final do desenho complexo."),
+    tags$ul(
+      li2("Changes to the success rule are recalculated with the exact engine: a stricter target or alpha; several arms (alpha split over the \\(k-1\\) comparisons with the shared control, Bonferroni or \u0160id\u00E1k); several primary endpoints (alpha split when any one is enough, or a target of \\(\\text{target}^{1/J}\\) per endpoint when all must succeed); non-adherence and contamination (the effect, and so the design prior, is diluted by \\(d = 1 - c_t - c_c\\), close to the classic \\(n/d^2\\) rule).",
+          "Mudan\u00E7as na regra de sucesso s\u00E3o recalculadas com o c\u00E1lculo exato: meta ou alfa mais exigentes; v\u00E1rios bra\u00E7os (alfa dividido entre as \\(k-1\\) compara\u00E7\u00F5es com o controle comum, Bonferroni ou \u0160id\u00E1k); v\u00E1rios desfechos prim\u00E1rios (alfa dividido quando basta um, ou meta de \\(\\text{meta}^{1/J}\\) por desfecho quando todos devem ter sucesso); n\u00E3o ades\u00E3o e contamina\u00E7\u00E3o (o efeito, e portanto a priori de planejamento, \u00E9 dilu\u00EDdo por \\(d = 1 - c_t - c_c\\), perto da regra cl\u00E1ssica \\(n/d^2\\))."),
+      li2("Design effects multiply the number of participants: cluster randomisation \\(1 + ((CV^2+1)\\,m - 1)\\,ICC\\) (Eldridge et al., 2006); the mean of \\(k\\) repeated measurements \\((1 + (k-1)\\rho)/k\\) (Frison & Pocock, 1992); a 2x2 crossover \\((1-\\rho)/2\\) per sequence (Senn, 2002); and interim analyses, the maximum-sample-size inflation factor of a group sequential design with Pocock or O'Brien-Fleming boundaries (Jennison & Turnbull, 2000; computed exactly and interpolated for your alpha and target).",
+          "Efeitos de desenho multiplicam o n\u00FAmero de participantes: randomiza\u00E7\u00E3o por clusters \\(1 + ((CV^2+1)\\,m - 1)\\,ICC\\) (Eldridge et al., 2006); a m\u00E9dia de \\(k\\) medidas repetidas \\((1 + (k-1)\\rho)/k\\) (Frison & Pocock, 1992); um crossover 2x2 \\((1-\\rho)/2\\) por sequ\u00EAncia (Senn, 2002); e an\u00E1lises interinas, o fator de infla\u00E7\u00E3o do tamanho m\u00E1ximo de um desenho sequencial em grupos com limites de Pocock ou O'Brien-Fleming (Jennison & Turnbull, 2000; calculado exatamente e interpolado para o seu alfa e a sua meta)."),
+      li2("The adjustments are assumed to act independently. Simulations in the test suite confirm that the extrapolated sizes give the target power for cluster, crossover and non-adherence designs, but combinations (e.g. cluster crossover, stepped-wedge) need dedicated methods; the card lists software for each case.",
+          "Sup\u00F5e-se que os ajustes atuem de forma independente. Simula\u00E7\u00F5es nos testes confirmam que os tamanhos extrapolados d\u00E3o o poder desejado para desenhos por clusters, crossover e com n\u00E3o ades\u00E3o, mas combina\u00E7\u00F5es (ex.: crossover por clusters, stepped-wedge) exigem m\u00E9todos espec\u00EDficos; o cart\u00E3o lista software para cada caso.")),
+
     h3_2("About the bayesassurance package", "Sobre o pacote bayesassurance"),
     tp("The app uses the package's general linear-model simulator bayes_sim_unbalanced() for continuous outcomes. Several other functions were reviewed and deliberately not used:",
        "O aplicativo usa o simulador de modelo linear geral do pacote, bayes_sim_unbalanced(), para desfechos cont\u00ednuos. Outras fun\u00e7\u00f5es foram analisadas e deliberadamente n\u00e3o usadas:"),
@@ -128,8 +139,8 @@ methods_ui <- function() {
           "O modelo de sobrevida sup\u00f5e tempos exponenciais, riscos proporcionais e censura n\u00e3o informativa. Riscos n\u00e3o constantes ou efeitos tardios do tratamento exigem software espec\u00edfico."),
       li2("Nuisance quantities (outcome SD, correlation, control event rate, control median) are treated as known; the Sensitivity tab shows how much the answer depends on them.",
           "Quantidades de inc\u00f4modo (DP do desfecho, correla\u00e7\u00e3o, taxa de eventos no controle, mediana no controle) s\u00e3o tratadas como conhecidas; a aba Sensibilidade mostra o quanto a resposta depende delas."),
-      li2("Clustered, longitudinal, count and multi-arm designs are not covered.",
-          "Desenhos por conglomerados, longitudinais, de contagem e com m\u00faltiplos bra\u00e7os n\u00e3o s\u00e3o cobertos.")),
+      li2("Clustered, longitudinal, crossover, multi-arm and group sequential designs are only extrapolated roughly (Complex design panel); count outcomes are not covered.",
+          "Desenhos por clusters, longitudinais, crossover, com v\u00E1rios bra\u00E7os e sequenciais em grupos s\u00E3o apenas extrapolados grosseiramente (painel Desenho complexo); desfechos de contagem n\u00E3o s\u00E3o cobertos.")),
 
     h3_2("Tips", "Dicas"),
     tags$ul(
@@ -156,6 +167,14 @@ methods_ui <- function() {
               em("Statistical Science"), "17(2):193-208."),
       tags$li("Kunzmann K, Grayling MJ, Lee KM, Robertson DS, Rufibach K, Wason JMS (2021). A review of Bayesian perspectives on sample size derivation for confirmatory trials.",
               em("The American Statistician"), "75(4):424-432."),
+      tags$li("Eldridge SM, Ashby D, Kerry S (2006). Sample size for cluster randomized trials: effect of coefficient of variation of cluster size and analysis method.",
+              em("International Journal of Epidemiology"), "35(5):1292-1300."),
+      tags$li("Frison L, Pocock SJ (1992). Repeated measures in clinical trials: analysis using mean summary statistics and its implications for design.",
+              em("Statistics in Medicine"), "11(13):1685-1704."),
+      tags$li("Senn S (2002).", em("Cross-over Trials in Clinical Research"), "2nd ed. Wiley."),
+      tags$li("Jennison C, Turnbull BW (2000).", em("Group Sequential Methods with Applications to Clinical Trials."), "Chapman & Hall/CRC."),
+      tags$li("Lachin JM (1981). Introduction to sample size determination and power analysis for clinical trials.",
+              em("Controlled Clinical Trials"), "2(2):93-113."),
       tags$li("Shannon CE (1948). A mathematical theory of communication.", em("Bell System Technical Journal"), "27:379-423."),
       tags$li("Pan J, Banerjee S (2023). bayesassurance: An R package for calculating sample size and Bayesian assurance.",
               em("The R Journal"),

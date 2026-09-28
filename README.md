@@ -82,6 +82,15 @@ the reasons given under [Method notes](#method-notes).
   measures in bits: outcome entropy (how predictable the result is) and
   mutual information (how much the result teaches you about whether the
   effect is real, and about its size).
+- **Complex design extrapolation.** A sidebar panel for more complex
+  designs: cluster randomisation, repeated measures, 2x2 crossover, several
+  arms, several primary endpoints, interim analyses (group sequential) and
+  non-adherence or contamination, plus a stricter target (default 90%) or
+  α. A card on the Results tab gives a rough extrapolation of the simple
+  design's sample size for power, assurance and detection if real. It shows
+  the total to enrol, clusters and events, a waterfall chart of what each
+  adjustment costs, and cautions with dedicated software to use for the
+  final calculation.
 - **Priors tab.** It shows your design and analysis priors and the effects
   that count as a success.
 - **Success vs true effect tab.** It shows how assurance averages the success
@@ -185,18 +194,21 @@ live-app button reads the `APP_URL` constant at the bottom of the page.
 | `R/methods_ui.R` | Content of the *Methods & help* tab |
 | `R/prompt_generator.R` | Builds the prompt for the LLM helper and reads its JSON answer |
 | `R/detectability.R` | Detection if real, outcome breakdown and Shannon information measures |
+| `R/complex_design.R` | Rough extrapolation to complex designs: design effects, α splitting, dilution, group sequential inflation factors |
 | `R/i18n.R` | English / Portuguese interface: translation helpers and the language toggle |
 | `tests/test_calculations.R` | Checks the `bayesassurance` simulation against the exact formula, power against `power.t.test`, and the chunked simulation |
 | `tests/test_models.R` | Checks simulation against exact assurance for every outcome type, plus the survival and binary building blocks |
 | `tests/test_prompt_generator.R` | Checks the prompt builder and the JSON answer parser |
 | `tests/test_detectability.R` | Checks the detectability measures, including against a direct simulation |
+| `tests/test_complex_design.R` | Checks the complex-design formulas against published values, and the extrapolated sample sizes against simulated cluster, crossover and non-adherence trials |
 | `tests/test_i18n.R` | Checks that every text has a Portuguese version, number formats, and that all plots build in both languages |
 | `setup.R` | Installs the required packages |
 
 Run the tests from the project folder with `Rscript tests/test_calculations.R`
 (about a minute), `Rscript tests/test_models.R` (about 10 seconds) and
-`Rscript tests/test_prompt_generator.R`, `Rscript tests/test_i18n.R` and
-`Rscript tests/test_detectability.R` (each a few seconds).
+`Rscript tests/test_prompt_generator.R`, `Rscript tests/test_i18n.R`,
+`Rscript tests/test_detectability.R` and `Rscript tests/test_complex_design.R`
+(each a few seconds).
 
 ## Method notes
 
@@ -238,6 +250,23 @@ Run the tests from the project folder with `Rscript tests/test_calculations.R`
   N − 3 degrees of freedom, identical to `stats::power.t.test()` for equal
   groups. Binary and time-to-event outcomes use a Wald z-test on the working
   scale.
+- **Complex designs (extrapolation).** Changes to the success rule are
+  recalculated exactly: a stricter target or α, α split over the k − 1
+  comparisons with a shared control (Bonferroni or Šidák) or over J
+  endpoints, a per-endpoint target of target<sup>1/J</sup> when all
+  endpoints must succeed, and an effect diluted by d = 1 − c<sub>T</sub> −
+  c<sub>C</sub> for non-adherence and contamination. Design effects then
+  multiply the sample size:
+  - clusters: 1 + ((CV² + 1)m − 1)·ICC (Eldridge et al., 2006);
+  - the mean of k repeated measurements: (1 + (k − 1)ρ)/k (Frison &
+    Pocock, 1992);
+  - 2x2 crossover: (1 − ρ)/2 per sequence (Senn, 2002);
+  - interim analyses: the Pocock or O'Brien–Fleming maximum-sample-size
+    inflation factor (Jennison & Turnbull, 2000), computed exactly and
+    interpolated.
+
+  The adjustments are treated as independent, so the result is a planning
+  estimate, not a replacement for dedicated software.
 - **Limitations.** Nuisance values (outcome SD, correlation, control-group
   event rate, control median) are treated as known; the Sensitivity tab shows
   how much they matter. The survival model assumes exponential event times
@@ -255,6 +284,15 @@ Run the tests from the project folder with `Rscript tests/test_calculations.R`
 - Borm GF, Fransen J, Lemmens WA (2007). A simple sample size formula for
   analysis of covariance in randomized clinical trials. *Journal of Clinical
   Epidemiology* 60(12):1234–1238.
+- Eldridge SM, Ashby D, Kerry S (2006). Sample size for cluster randomized
+  trials: effect of coefficient of variation of cluster size and analysis
+  method. *International Journal of Epidemiology* 35(5):1292–1300.
+- Frison L, Pocock SJ (1992). Repeated measures in clinical trials: analysis
+  using mean summary statistics and its implications for design. *Statistics
+  in Medicine* 11(13):1685–1704.
+- Senn S (2002). *Cross-over Trials in Clinical Research*, 2nd ed. Wiley.
+- Jennison C, Turnbull BW (2000). *Group Sequential Methods with
+  Applications to Clinical Trials*. Chapman & Hall/CRC.
 - Pan J, Banerjee S (2023). bayesassurance: An R package for calculating
   sample size and Bayesian assurance. *The R Journal*.
   [RJ-2023-066](https://journal.r-project.org/articles/RJ-2023-066/)

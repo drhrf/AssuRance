@@ -291,6 +291,138 @@ sidebar_ui <- function() {
           min = 0.5, max = 0.99, value = 0.8, step = 0.01)
       ),
 
+      # ---- Complex design (extrapolation) ------------------------------
+      accordion_panel(
+        tt("Complex design (extrapolation)", "Desenho complexo (extrapola\u00E7\u00E3o)"), value = "complex",
+        checkboxInput("cx_on",
+          lab2("Extrapolate to a more complex or stricter design",
+               "Extrapolar para um desenho mais complexo ou exigente",
+               "Shows a card on the Results tab with a rough estimate of how much bigger the trial must be with the complications and stricter requirements chosen here. It does not change the main results.",
+               "Mostra um cart\u00E3o na aba Resultados com uma estimativa grosseira de quanto o ensaio precisa crescer com as complica\u00E7\u00F5es e exig\u00EAncias escolhidas aqui. N\u00E3o muda os resultados principais."),
+          value = FALSE),
+        conditionalPanel(
+          "input.cx_on",
+          checkboxGroupInput("cx_features",
+            lab2("Design features", "Caracter\u00EDsticas do desenho",
+                 "Tick every complication your real design has. Each one is turned into a textbook adjustment of the simple two-arm sample size.",
+                 "Marque cada complica\u00E7\u00E3o que o seu desenho real tem. Cada uma vira um ajuste cl\u00E1ssico do tamanho amostral do desenho simples de dois bra\u00E7os."),
+            choiceNames = list(
+              tt("Cluster randomisation", "Randomiza\u00E7\u00E3o por clusters"),
+              tt("Repeated measures (continuous)", "Medidas repetidas (cont\u00EDnuo)"),
+              tt("2x2 crossover (difference in means)", "Crossover 2x2 (diferen\u00E7a de m\u00E9dias)"),
+              tt("Several arms, shared control", "V\u00E1rios bra\u00E7os, controle comum"),
+              tt("Several primary endpoints", "V\u00E1rios desfechos prim\u00E1rios"),
+              tt("Interim analyses (group sequential)", "An\u00E1lises interinas (sequencial em grupos)"),
+              tt("Non-adherence / contamination", "N\u00E3o ades\u00E3o / contamina\u00E7\u00E3o")),
+            choiceValues = CX_FEATURES),
+          conditionalPanel(
+            "input.cx_features && input.cx_features.indexOf('cluster') > -1",
+            tags$strong(class = "small", tt("Cluster randomisation", "Randomiza\u00E7\u00E3o por clusters")),
+            layout_columns(
+              col_widths = c(4, 4, 4), gap = "0.5rem",
+              numericInput("cx_m", lab2("Cluster size", "Tamanho do cluster",
+                "Average number of participants per cluster (clinic, school, village...).",
+                "N\u00FAmero m\u00E9dio de participantes por cluster (cl\u00EDnica, escola, comunidade...)."),
+                value = 20, min = 1, step = 1),
+              numericInput("cx_icc", lab2("ICC", "ICC",
+                "Intracluster correlation: how alike participants in the same cluster are. Typically 0.01-0.05 for clinical outcomes, higher for process measures.",
+                "Correla\u00E7\u00E3o intracluster: o quanto participantes do mesmo cluster se parecem. Tipicamente 0,01-0,05 para desfechos cl\u00EDnicos, maior para medidas de processo."),
+                value = 0.05, min = 0, max = 0.99, step = 0.01),
+              numericInput("cx_cv", lab2("Size CV", "CV do tamanho",
+                "Coefficient of variation of cluster sizes (SD / mean). 0 = all clusters the same size; 0.4-0.7 is common.",
+                "Coeficiente de varia\u00E7\u00E3o dos tamanhos dos clusters (DP / m\u00E9dia). 0 = todos do mesmo tamanho; 0,4-0,7 \u00E9 comum."),
+                value = 0, min = 0, max = 3, step = 0.1))
+          ),
+          conditionalPanel(
+            "input.cx_features && input.cx_features.indexOf('repeated') > -1",
+            tags$strong(class = "small", tt("Repeated measures", "Medidas repetidas")),
+            layout_columns(
+              col_widths = c(6, 6), gap = "0.5rem",
+              numericInput("cx_k", lab2("Measurements", "Medidas",
+                "Number of follow-up measurements whose mean is analysed.",
+                "N\u00FAmero de medidas de seguimento cuja m\u00E9dia \u00E9 analisada."),
+                value = 3, min = 1, max = 50, step = 1),
+              numericInput("cx_rep_rho", lab2("Correlation", "Correla\u00E7\u00E3o",
+                "Correlation between two measurements of the same participant.",
+                "Correla\u00E7\u00E3o entre duas medidas do mesmo participante."),
+                value = 0.5, min = 0, max = 1, step = 0.05))
+          ),
+          conditionalPanel(
+            "input.cx_features && input.cx_features.indexOf('crossover') > -1",
+            numericInput("cx_x_rho",
+              lab2("Crossover: within-person correlation", "Crossover: correla\u00E7\u00E3o intraindividual",
+                   "Correlation between a participant's outcomes in the two periods. Higher means a crossover saves more participants.",
+                   "Correla\u00E7\u00E3o entre os desfechos de um participante nos dois per\u00EDodos. Quanto maior, mais participantes o crossover economiza."),
+              value = 0.6, min = 0, max = 0.99, step = 0.05)
+          ),
+          conditionalPanel(
+            "input.cx_features && input.cx_features.indexOf('multiarm') > -1",
+            numericInput("cx_arms",
+              lab2("Number of arms (including control)", "N\u00FAmero de bra\u00E7os (incluindo o controle)",
+                   "Each treatment arm is compared with the shared control; alpha is split over the comparisons.",
+                   "Cada bra\u00E7o de tratamento \u00E9 comparado ao controle comum; o alfa \u00E9 dividido entre as compara\u00E7\u00F5es."),
+              value = 3, min = 3, max = 10, step = 1),
+            radioButtons("cx_mult", NULL, inline = TRUE,
+              choiceNames = list(tt("Bonferroni", "Bonferroni"), tt("\u0160id\u00E1k", "\u0160id\u00E1k")),
+              choiceValues = c("bonferroni", "sidak"))
+          ),
+          conditionalPanel(
+            "input.cx_features && input.cx_features.indexOf('endpoints') > -1",
+            numericInput("cx_J",
+              lab2("Number of primary endpoints", "N\u00FAmero de desfechos prim\u00E1rios",
+                   "Assumes each endpoint needs about the same sample size as the one described above.",
+                   "Sup\u00F5e que cada desfecho precise de um tamanho amostral parecido com o descrito acima."),
+              value = 2, min = 2, max = 10, step = 1),
+            radioButtons("cx_jmode", NULL,
+              choiceNames = list(tt("Success if any one succeeds (alpha is split)", "Sucesso se qualquer um tiver sucesso (alfa dividido)"),
+                                 tt("All must succeed (co-primary)", "Todos devem ter sucesso (coprim\u00E1rios)")),
+              choiceValues = c("any", "all"))
+          ),
+          conditionalPanel(
+            "input.cx_features && input.cx_features.indexOf('interim') > -1",
+            numericInput("cx_looks",
+              lab2("Number of analyses (including the final one)", "N\u00FAmero de an\u00E1lises (incluindo a final)",
+                   "Equally spaced analyses that may stop the trial early for efficacy.",
+                   "An\u00E1lises igualmente espa\u00E7adas que podem encerrar o ensaio cedo por efic\u00E1cia."),
+              value = 3, min = 2, max = 5, step = 1),
+            radioButtons("cx_bound", NULL, inline = TRUE,
+              choiceNames = list(tt("O'Brien-Fleming", "O'Brien-Fleming"), tt("Pocock", "Pocock")),
+              choiceValues = c("obf", "pocock"))
+          ),
+          conditionalPanel(
+            "input.cx_features && input.cx_features.indexOf('adherence') > -1",
+            layout_columns(
+              col_widths = c(6, 6), gap = "0.5rem",
+              numericInput("cx_nonadh", lab2("Not taking treatment (%)", "Sem tomar o tratamento (%)",
+                "Share of the treatment group expected not to receive or take the treatment.",
+                "Propor\u00E7\u00E3o do grupo tratamento que se espera n\u00E3o receber ou n\u00E3o tomar o tratamento."),
+                value = 10, min = 0, max = 89, step = 5),
+              numericInput("cx_contam", lab2("Controls treated (%)", "Controles tratados (%)",
+                "Share of the control group expected to get the treatment anyway (contamination).",
+                "Propor\u00E7\u00E3o do grupo controle que se espera receber o tratamento mesmo assim (contamina\u00E7\u00E3o)."),
+                value = 5, min = 0, max = 89, step = 5))
+          ),
+          tags$hr(class = "my-2"),
+          tags$strong(class = "small", tt("Stricter requirements", "Exig\u00EAncias mais r\u00EDgidas")),
+          layout_columns(
+            col_widths = c(6, 6), gap = "0.5rem",
+            selectInput("cx_target",
+              lab2("Target", "Meta",
+                   "Probability of success the complex design should reach (for power, assurance and detection if real).",
+                   "Probabilidade de sucesso que o desenho complexo deve atingir (para poder, assurance e detec\u00E7\u00E3o se real)."),
+              choices = c("80%" = "0.8", "85%" = "0.85", "90%" = "0.9", "95%" = "0.95"),
+              selected = "0.9", selectize = FALSE),
+            selectInput("cx_alpha",
+              lab2("Alpha", "Alfa",
+                   "Keep the alpha set above, or pick a stricter one. 0.00125 (one-sided) is sometimes asked of a single pivotal trial in place of two trials at 0.025.",
+                   "Mantenha o alfa definido acima ou escolha um mais exigente. 0,00125 (unilateral) \u00E0s vezes \u00E9 exigido de um \u00FAnico ensaio pivotal no lugar de dois ensaios a 0,025."),
+              choices = c("Same as above" = "same", "0.05" = "0.05", "0.025" = "0.025", "0.01" = "0.01",
+                          "0.005" = "0.005", "0.00125" = "0.00125"),
+              selected = "same", selectize = FALSE)
+          )
+        )
+      ),
+
       # ---- Computation -------------------------------------------------
       accordion_panel(
         tt("Computation", "C\u00E1lculo"), value = "computation",

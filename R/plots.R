@@ -479,3 +479,47 @@ plot_outcome_bar <- function(d, two_sided) {
     plotly_finish() |>
     plotly::config(displayModeBar = FALSE)
 }
+
+# ---- Complex design: how the sample size builds up (waterfall) ------------------
+# r = cx_extrapolate() result; crit = "power", "assurance" or "detect".
+plot_cx_waterfall <- function(r, crit, ratio) {
+  st <- r$crit[[crit]]$steps
+  final <- r$crit[[crit]]$final
+  bad <- which(is.na(st$n))
+  if (length(bad)) st <- st[seq_len(bad[1] - 1), , drop = FALSE]
+  labs <- vapply(st$key, cx_step_label, "", r = r)
+  n <- st$n
+  vals <- c(n[1], diff(n))
+  measure <- c("absolute", rep("relative", length(n) - 1))
+  text <- c(fmt_int(n[1]), if (length(n) > 1) fmt_x(n[-1] / n[-length(n)]))
+  hover <- paste0(labs, ": n \u2248 ", fmt_int(n))
+  if (!is.null(final)) {
+    labs <- c(labs, cx_step_label("final", r)); vals <- c(vals, 0); measure <- c(measure, "total")
+    text <- c(text, fmt_int(final$n_c)); hover <- c(hover, paste0(cx_step_label("final", r), ": n = ", fmt_int(final$n_c)))
+  }
+  if (!length(n)) {
+    return(plotly::plot_ly() |> plotly::layout(
+      annotations = list(list(text = L("The target cannot be reached.", "A meta n\u00E3o pode ser atingida."),
+                              showarrow = FALSE, xref = "paper", yref = "paper", x = 0.5, y = 0.5)),
+      xaxis = list(visible = FALSE), yaxis = list(visible = FALSE)) |> plotly_finish())
+  }
+  fig <- plotly::plot_ly(
+    type = "waterfall", x = factor(labs, levels = labs), y = vals, measure = measure,
+    text = text, textposition = "outside", hovertext = hover, hoverinfo = "text",
+    connector = list(line = list(color = COL_PRIOR, width = 1, dash = "dot")),
+    increasing = list(marker = list(color = "#d1661a")),
+    decreasing = list(marker = list(color = COL_ANALYSIS)),
+    totals = list(marker = list(color = COL_ASSUR)))
+  anno <- if (length(bad)) list(list(
+    text = paste0(L("Not reachable after: ", "Inating\u00EDvel ap\u00F3s: "), cx_step_label(r$crit[[crit]]$steps$key[bad[1]], r)),
+    showarrow = FALSE, xref = "paper", yref = "paper", x = 1, y = 1, xanchor = "right",
+    font = list(color = "#e63946"))) else list()
+  top <- max(cumsum(vals), n, na.rm = TRUE)
+  fig |>
+    plotly::layout(
+      xaxis = list(title = "", tickangle = -30),
+      yaxis = list(title = x_label(ratio), range = c(0, top * 1.15), rangemode = "tozero"),
+      showlegend = FALSE, annotations = anno, margin = list(t = 20)) |>
+    plotly_finish() |>
+    plotly::config(displayModeBar = FALSE)
+}

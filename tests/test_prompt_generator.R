@@ -93,5 +93,18 @@ check("inverted ratio range, impossible rate and unknown measure rejected",
 old <- parse_llm_values("{\"margin\": 2, \"alt\": \"less\"}")
 check("old `margin` key converted to a signed threshold", old$values$threshold == -2)
 
+# --- Complex-design fields -------------------------------------------------------
+check("complex-design keys only when those features are ticked",
+      !any(grepl("^cx_", llm_keys_for("cont"))) &&
+        all(c("cx_m", "cx_icc", "cx_cv", "cx_nonadh") %in% llm_keys_for("cont", cx = c("cluster", "adherence"))))
+check("complex-design keys respect the outcome type (no crossover for survival)",
+      !("cx_x_rho" %in% llm_keys_for("surv", cx = "crossover")) && "cx_x_rho" %in% llm_keys_for("cont", cx = "crossover"))
+pc <- build_llm_prompt(info, otype = "binary", measure = "or", cx = c("cluster", "interim"))
+check("the prompt asks for the ICC and mentions the planned design features",
+      has(pc, "`cx_icc`") && has(pc, "interim analyses (group sequential)") && has(pc, "Multiplicity"))
+pv <- parse_llm_values('{"cx_icc": 0.03, "cx_m": 25, "cx_nonadh": 120, "cx_rep_rho": 1}')
+check("complex-design values are validated when applied",
+      pv$values$cx_icc == 0.03 && pv$values$cx_m == 25 && is.null(pv$values$cx_nonadh) && pv$values$cx_rep_rho == 1)
+
 if (!ok) stop("Some checks failed.")
 cat("All checks passed.\n")

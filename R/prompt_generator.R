@@ -83,7 +83,22 @@ LLM_FIELDS <- list(
   alpha            = list(type = "prob",     use = "all",      label = "Alpha",
                           desc = "significance threshold, e.g. 0.05 (0.025 is common for one-sided confirmatory trials)"),
   target           = list(type = "target",   use = "all",      label = "Target",
-                          desc = "target probability of success, 0.5-0.99 (e.g. 0.8 or 0.9)")
+                          desc = "target probability of success, 0.5-0.99 (e.g. 0.8 or 0.9)"),
+  # Complex-design extrapolation (only asked for when those features are ticked)
+  cx_m             = list(type = "positive", use = "cx_cluster", label = "Cluster size",
+                          desc = "average number of participants per cluster"),
+  cx_icc           = list(type = "icc",      use = "cx_cluster", label = "ICC",
+                          desc = "intracluster correlation coefficient of the primary outcome (0 to <1)"),
+  cx_cv            = list(type = "nonneg",   use = "cx_cluster", label = "Cluster-size CV",
+                          desc = "coefficient of variation of cluster sizes (SD / mean; 0 = equal sizes)"),
+  cx_rep_rho       = list(type = "unit",     use = "cx_repeated", label = "Correlation between repeated measurements",
+                          desc = "correlation between two follow-up measurements of the same participant (0-1)"),
+  cx_x_rho         = list(type = "rho",      use = "cx_crossover", label = "Within-person correlation (crossover)",
+                          desc = "correlation between a participant's outcomes in the two crossover periods (0-0.95)"),
+  cx_nonadh        = list(type = "percent",  use = "cx_adherence", label = "Treatment group not taking treatment (%)",
+                          desc = "percentage of the treatment group expected not to receive or take the treatment (0-90)"),
+  cx_contam        = list(type = "percent",  use = "cx_adherence", label = "Controls treated (%)",
+                          desc = "percentage of the control group expected to receive the treatment anyway (0-90)")
 )
 
 # Portuguese labels for the table shown after applying an answer.
@@ -101,7 +116,10 @@ LLM_LABELS_PT <- c(
   same_prior = "Analisar com a mesma priori", n_min = "n m\u00EDnimo", n_max = "n m\u00E1ximo", n_step = "Passo",
   ratio = "Raz\u00E3o de aloca\u00E7\u00E3o", dropout_percent = "Abandono (%)", alt = "Dire\u00E7\u00E3o do teste",
   threshold = "Limiar de sucesso", rd_threshold = "Limiar de sucesso (pontos)", ratio_threshold = "Limiar de sucesso (raz\u00E3o)",
-  alpha = "Alfa", target = "Meta")
+  alpha = "Alfa", target = "Meta",
+  cx_m = "Tamanho do cluster", cx_icc = "ICC", cx_cv = "CV do tamanho dos clusters",
+  cx_rep_rho = "Correla\u00E7\u00E3o entre medidas repetidas", cx_x_rho = "Correla\u00E7\u00E3o intraindividual (crossover)",
+  cx_nonadh = "Grupo tratamento sem tomar o tratamento (%)", cx_contam = "Controles tratados (%)")
 for (k in names(LLM_LABELS_PT)) LLM_FIELDS[[k]]$label_pt <- LLM_LABELS_PT[[k]]
 
 outcome_type_label <- function(otype, measure = NULL) {
@@ -117,13 +135,20 @@ outcome_type_label <- function(otype, measure = NULL) {
                "desfecho de tempo at\u00E9 o evento (sobrevida), raz\u00E3o de riscos"))
 }
 
+# Complex-design features (see R/complex_design.R) with prompt fields, and
+# the outcome types they apply to.
+LLM_CX_TYPES <- list(cluster = c("cont", "ancova", "binary", "surv"), repeated = c("cont", "ancova"),
+                     crossover = "cont", adherence = c("cont", "ancova", "binary", "surv"))
+
 # JSON keys that apply to an outcome type (in LLM_FIELDS order).
-llm_keys_for <- function(otype, measure = NULL) {
+# cx : complex-design features ticked in the sidebar (may be empty).
+llm_keys_for <- function(otype, measure = NULL, cx = character(0)) {
   otype <- otype %||% "cont"
   fam <- if (otype %in% c("cont", "ancova")) "additive"
          else if (otype == "binary" && identical(measure, "rd")) "rd" else "ratio"
+  cx <- Filter(function(f) otype %in% LLM_CX_TYPES[[f]], intersect(cx %||% character(0), names(LLM_CX_TYPES)))
   keep <- vapply(LLM_FIELDS, function(f)
-    any(f$use %in% c("all", otype, fam)), logical(1))
+    any(f$use %in% c("all", otype, fam, paste0("cx_", cx))), logical(1))
   names(LLM_FIELDS)[keep]
 }
 
@@ -171,7 +196,9 @@ prior_guidance <- function(otype, measure) {
 # ---- Prompt ---------------------------------------------------------------
 # info    : named list of character/logical fields from the form (see app.R).
 # current : optional list of the app's current input values, or NULL.
-build_llm_prompt <- function(info, current = NULL, otype = "cont", measure = "or") {
+# cx      : complex-design features ticked in the sidebar (R/complex_design.R).
+build_llm_prompt <- function(info, current = NULL, otype = "cont", measure = "or",
+                             cx = character(0)) {
   otype <- otype %||% "cont"; measure <- measure %||% "or"
   has <- function(x) !is.null(x) && length(x) == 1 && !is.na(x) && nzchar(trimws(x))
   line <- function(label, x) if (has(x)) paste0("- ", label, ": ", trimws(x)) else NULL
@@ -196,7 +223,20 @@ build_llm_prompt <- function(info, current = NULL, otype = "cont", measure = "or
   known <- if (has(info$known)) c("", "Evidence I already know about (verify it; do not assume it is complete):",
                                   trimws(info$known)) else NULL
 
-  keys <- llm_keys_for(otype, measure)
+  keys <- llm_keys_for(otype, measure, cx)
+  cx <- cx %||% character(0)
+  cx_names <- c(cluster = "cluster randomisation", repeated = "repeated measurements of the outcome",
+                crossover = "a 2x2 crossover", multiarm = "several treatment arms sharing one control",
+                endpoints = "several primary endpoints", interim = "interim analyses (group sequential)",
+                adherence = "expected non-adherence / contamination")
+  if (length(cx)) project <- c(project, paste0("- Design features planned: ", paste(cx_names[intersect(names(cx_names), cx)], collapse = "; ")))
+  cx_guidance <- c(
+    if ("cluster" %in% cx) "- **Cluster randomisation (`cx_m`, `cx_icc`, `cx_cv`)**: the average cluster size, the intracluster correlation (ICC) of this outcome in similar clusters and settings (look for published ICC databases and cluster trials reporting ICCs; they are often 0.01-0.05 for clinical outcomes), and the coefficient of variation of cluster sizes. Give a plausible range for the ICC, not just one value.",
+    if ("repeated" %in% cx && otype %in% LLM_CX_TYPES$repeated) "- **Repeated measures (`cx_rep_rho`)**: the correlation between two follow-up measurements of the outcome in the same participant.",
+    if ("crossover" %in% cx && otype %in% LLM_CX_TYPES$crossover) "- **Crossover (`cx_x_rho`)**: the within-person correlation between the two periods; also comment on carry-over, washout and whether the condition is stable enough for a crossover.",
+    if ("adherence" %in% cx) "- **Non-adherence and contamination (`cx_nonadh`, `cx_contam`)**: realistic percentages from comparable trials of the treatment group not receiving/taking the treatment, and of controls receiving it.",
+    if (any(c("multiarm", "endpoints", "interim") %in% cx)) "- **Multiplicity and interim analyses**: say which multiplicity adjustment (e.g. Dunnett, Holm, hierarchical testing) and which interim-analysis plan (number of looks, stopping boundaries) are usual for this kind of trial.")
+  if (length(cx_guidance)) cx_guidance <- c(cx_guidance, "- Note that the app only extrapolates such designs roughly; point me to the dedicated methods or software I should use for the final calculation.")
   current_block <- NULL
   if (!is.null(current)) {
     current_block <- c(
@@ -233,6 +273,7 @@ build_llm_prompt <- function(info, current = NULL, otype = "cont", measure = "or
     "## The inputs I need, and how to derive each one",
     type_guidance(otype, measure),
     prior_guidance(otype, measure),
+    cx_guidance,
     "- **Success criterion (`alt`, threshold, `alpha`)**: two-sided vs one-sided (and which direction: `greater` means the effect must be above the threshold, `less` below it), the significance level usual for this kind of trial, and the success threshold for one-sided tests: the no-effect value for ordinary superiority, a value beyond it in the beneficial direction to demand a clinically meaningful effect (find the published minimal clinically important difference, preferring anchor-based estimates), or a value on the harmful side for a non-inferiority design (justify the margin, e.g. from regulatory guidance).",
     "- **Allocation (`ratio`)** and **dropout**: the planned randomisation ratio (treatment : control) and dropout / loss to follow-up in comparable trials.",
     "- **Sample sizes (`n_min`, `n_max`, `n_step`)**: a range per group that brackets the likely answer. Compute an approximate conventional sample size for 80-90% power at the design prior's best guess, then choose a range from well below to well above it (respecting my constraints), with a step giving about 15-25 points.",
@@ -338,6 +379,8 @@ parse_llm_values <- function(text) {
         rd       = abs(v) < 100,
         rho      = v >= 0 && v <= 0.95,
         prob     = v > 0 && v < 1,
+        icc      = v >= 0 && v < 1,
+        unit     = v >= 0 && v <= 1,
         target   = v >= 0.5 && v <= 0.99)
     }
     if (isTRUE(ok)) out[[k]] <- v

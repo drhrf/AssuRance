@@ -52,6 +52,7 @@ results_tab <- function() {
       card_header(tt("Summary in plain language", "Resumo em linguagem simples")),
       uiOutput("summary")
     ),
+    conditionalPanel("input.cx_on", cx_card()),
     card(
       card_header(
         class = "d-flex justify-content-between align-items-center flex-wrap gap-2",
@@ -72,6 +73,37 @@ results_tab <- function() {
         actionButton("save_scenario", tt("Save scenario", "Salvar cen\u00E1rio"), class = "btn-outline-primary w-100")
       )
     )
+  )
+}
+
+# Complex-design extrapolation card (shown when it is switched on in the sidebar).
+cx_card <- function() {
+  card(
+    class = "border-warning",
+    card_header(
+      class = "d-flex justify-content-between align-items-center flex-wrap gap-2",
+      tags$span(tt("Complex design: rough extrapolation", "Desenho complexo: extrapola\u00E7\u00E3o grosseira")),
+      tags$span(class = "badge text-bg-warning", tt("approximate", "aproximado"))),
+    uiOutput("cx_headline"),
+    tableOutput("cx_table"),
+    layout_columns(
+      col_widths = c(7, 5),
+      div(
+        radioButtons("cx_wf_crit", tt("How the sample size builds up, for:", "Como o tamanho amostral se forma, para:"),
+                     inline = TRUE,
+                     choiceNames = list(tt("Frequentist power", "Poder frequentista"),
+                                        tt("Bayesian assurance", "Assurance bayesiana"),
+                                        tt("Detection if real", "Detec\u00E7\u00E3o se real")),
+                     choiceValues = c("power", "assurance", "detect")),
+        plotlyOutput("cx_waterfall", height = "340px")),
+      div(class = "small", uiOutput("cx_factors"))),
+    tags$details(
+      class = "small mt-2",
+      tags$summary(tt("Assumptions, cautions and dedicated software", "Suposi\u00E7\u00F5es, cuidados e software espec\u00EDfico")),
+      uiOutput("cx_notes")),
+    card_footer(tags$small(tt(
+      "Uses the exact engine and the inputs of the last calculation; updates as soon as you change the complex-design settings.",
+      "Usa o c\u00E1lculo exato e as entradas do \u00FAltimo c\u00E1lculo; atualiza assim que voc\u00EA muda as configura\u00E7\u00F5es do desenho complexo.")))
   )
 }
 

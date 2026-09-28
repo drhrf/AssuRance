@@ -30,7 +30,8 @@ check("no empty translation", !grepl('lang="pt"></span>|lang="pt"></p>', paste(s
 choices <- list(otype = c("cont", "ancova", "binary", "surv"),
                 pg_phase = c("Pilot / feasibility", "Phase II", "Phase III / confirmatory",
                              "Pragmatic / effectiveness", "Non-inferiority", "Other / not sure"),
-                pg_language = c("English", "Portuguese (Brazil)", "Spanish", "French", "German"))
+                pg_language = c("English", "Portuguese (Brazil)", "Spanish", "French", "German"),
+                cx_alpha = c("same", "0.05", "0.025", "0.01", "0.005", "0.00125"))
 check("every dropdown option has a translation",
       all(vapply(names(choices), function(id) setequal(names(I18N_OPTIONS[[id]]), choices[[id]]), logical(1))))
 check("every translated placeholder belongs to a real input",
@@ -95,6 +96,9 @@ builders <- list(
   detect_curves = function() plot_detect_curves(detectability(mm, pp$n_t, pp$n_c), 1, 0.8),
   entropy_curves = function() plot_entropy_curves(detectability(mm, pp$n_t, pp$n_c), 1),
   outcome_bar = function() plot_outcome_bar(detectability_one(mm, 200, 200), FALSE),
+  cx_waterfall = function() plot_cx_waterfall(cx_extrapolate(pp, mm, list(features = CX_FEATURES, target = 0.9, alpha = 0.01,
+    m = 20, icc = 0.05, cv = 0.4, k = 3, rep_rho = 0.5, x_rho = 0.6, arms = 3, mult = "sidak", J = 2, jmode = "all",
+    looks = 4, bound = "pocock", nonadh = 10, contam = 5), list(power = 150, assurance = 200, detect = 210)), "assurance", 1),
   outcome_bar_2s = function() plot_outcome_bar(detectability_one(build_model(modifyList(pp, list(alt = "two.sided"))), 200, 200), TRUE))
 for (lg in c("en", "pt")) {
   okb <- vapply(builders, function(f) !inherits(tryCatch(with_lang(lg, plotly::plotly_build(f())),

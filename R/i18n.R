@@ -58,6 +58,13 @@ I18N_OPTIONS <- list(
     "Pragmatic / effectiveness" = c("Pragmatic / effectiveness", "Pragm\u00E1tico / efetividade"),
     "Non-inferiority"           = c("Non-inferiority", "N\u00E3o inferioridade"),
     "Other / not sure"          = c("Other / not sure", "Outro / n\u00E3o sei")),
+  cx_alpha = list(
+    "same"    = c("Same as above", "Igual ao de cima"),
+    "0.05"    = c("0.05", "0,05"),
+    "0.025"   = c("0.025", "0,025"),
+    "0.01"    = c("0.01", "0,01"),
+    "0.005"   = c("0.005", "0,005"),
+    "0.00125" = c("0.00125", "0,00125")),
   pg_language = list(
     "English"             = c("English", "Ingl\u00EAs"),
     "Portuguese (Brazil)" = c("Portuguese (Brazil)", "Portugu\u00EAs (Brasil)"),

@@ -16,6 +16,8 @@
 #   R/ui_tabs.R         main panel and tabs
 #   R/summary_text.R    plain-language summary
 #   R/plots.R           plot builders
+#   R/detectability.R   detection if real and Shannon information
+#   R/complex_design.R  rough extrapolation to complex designs
 #   R/prompt_generator.R  LLM prompt helper
 #   R/methods_ui.R      "Methods & help" tab
 # =============================================================================
@@ -98,7 +100,7 @@ server <- function(input, output, session) {
     "pg_title", "pg_condition", "pg_intervention", "pg_comparator",
     "pg_outcome", "pg_timepoint", "pg_phase", "pg_direction", "pg_setting",
     "pg_mcid", "pg_known", "pg_constraints", "pg_web", "pg_current",
-    "pg_language", "pg_answer", "pg_apply",
+    "pg_language", "pg_answer", "pg_apply", "cx_wf_crit",
     paste0("results_table_", c("rows_current", "rows_all", "rows_selected",
                                "search", "state", "cell_clicked",
                                "cells_selected", "columns_selected"))))
@@ -703,7 +705,13 @@ server <- function(input, output, session) {
         describe_detectability(res$det[nrow(res$det), ], res$model),
         "",
         L("RESULTS", "RESULTADOS"),
-        utils::capture.output(print(tab, row.names = FALSE))
+        utils::capture.output(print(tab, row.names = FALSE)),
+        if (isTRUE(input$cx_on)) {
+          r <- tryCatch(cx_result(), error = function(e) NULL)
+          if (!is.null(r))
+            c("", L("COMPLEX DESIGN (rough extrapolation)", "DESENHO COMPLEXO (extrapola\u00E7\u00E3o grosseira)"),
+              cx_report_lines(r, res$p, cx_base(res)))
+        }
       )
       writeLines(enc2utf8(lines), file, useBytes = TRUE)
     }))
@@ -825,6 +833,63 @@ server <- function(input, output, session) {
     res <- results(); plot_entropy_curves(res$det, res$p$ratio, res$model$alt == "two.sided")
   }))
 
+  # ---- Complex design (extrapolation) card on the Results tab --------------------
+  # A rough extrapolation from the last run's simple design (R/complex_design.R).
+  # It uses the exact engine, so it updates live as the settings change.
+  cx_inputs <- reactive({
+    list(features = input$cx_features %||% character(0),
+         target = suppressWarnings(as.numeric(input$cx_target %||% NA)),
+         alpha = if (is.null(input$cx_alpha) || identical(input$cx_alpha, "same")) NA_real_
+                 else as.numeric(input$cx_alpha),
+         m = input$cx_m, icc = input$cx_icc, cv = input$cx_cv,
+         k = input$cx_k, rep_rho = input$cx_rep_rho, x_rho = input$cx_x_rho,
+         arms = input$cx_arms, mult = input$cx_mult %||% "bonferroni",
+         J = input$cx_J, jmode = input$cx_jmode %||% "any",
+         looks = input$cx_looks, bound = input$cx_bound %||% "obf",
+         nonadh = input$cx_nonadh, contam = input$cx_contam)
+  }) |> debounce(500)
+  cx_base <- function(res) list(power = res$metrics$n_power, assurance = res$metrics$n_assur,
+                                detect = res$metrics$n_detect)
+  # Not wrapped in W(): the numbers do not depend on the language.
+  cx_result <- reactive({
+    req(isTRUE(input$cx_on))
+    res <- results(); cx <- cx_inputs()
+    req(is.null(with_lang("en", cx_check(cx))))
+    cx_extrapolate(res$p, res$model, cx, cx_base(res))
+  })
+
+  output$cx_headline <- renderUI(W({
+    req(isTRUE(input$cx_on))
+    res <- results()
+    msg <- cx_check(cx_inputs())
+    if (!is.null(msg)) return(div(class = "alert alert-warning py-2 small", msg))
+    r <- cx_result()
+    tagList(
+      lapply(cx_headline(r, res$p, cx_base(res)), tags$p),
+      if (!length(r$used) && nrow(r$crit$power$steps) == 1)
+        div(class = "alert alert-info py-2 small",
+            L("Tick design features or choose a stricter target or alpha in the sidebar (Complex design panel).",
+              "Marque caracter\u00EDsticas do desenho ou escolha uma meta ou um alfa mais exigente na barra lateral (painel Desenho complexo).")))
+  }))
+  output$cx_table <- renderTable(W({
+    res <- results(); cx_result_table(cx_result(), res$p, cx_base(res))
+  }), striped = TRUE, spacing = "s", align = "l")
+  output$cx_waterfall <- renderPlotly(W(
+    plot_cx_waterfall(cx_result(), input$cx_wf_crit %||% "power", results()$p$ratio)))
+  output$cx_factors <- renderUI(W({
+    d <- cx_factor_table(cx_result(), results()$p)
+    if (is.null(d)) return(p(class = "text-muted", L("No adjustments selected.", "Nenhum ajuste selecionado.")))
+    tagList(
+      tags$ul(class = "list-unstyled mb-1",
+        lapply(seq_len(nrow(d)), function(i) tags$li(class = "mb-2",
+          tags$strong(d[i, 1]), " ", tags$span(class = "badge text-bg-light border", d[i, 4]), tags$br(),
+          d[i, 2], tags$br(),
+          tags$span(class = "text-muted", d[i, 3], if (nzchar(d[i, 5])) paste0(" (", d[i, 5], ")"))))),
+      tags$small(class = "text-muted", L("Multipliers are for the frequentist power sample size.",
+                                         "Os multiplicadores s\u00E3o para o tamanho amostral do poder frequentista.")))
+  }))
+  output$cx_notes <- renderUI(W(tags$ul(lapply(cx_notes(cx_result(), results()$p), tags$li))))
+
   # ---- Sensitivity tab ---------------------------------------------------------
   output$sens_heat <- renderPlotly(W({
     res <- results()
@@ -909,13 +974,17 @@ server <- function(input, output, session) {
         L("The prompt is written for the outcome type selected in the sidebar: ",
           "O prompt \u00E9 escrito para o tipo de desfecho selecionado na barra lateral: "),
         strong(outcome_type_label(input$otype, input$measure)),
-        L(". Change it there first if needed.", ". Mude-o l\u00E1 primeiro, se necess\u00E1rio."))
+        L(". Change it there first if needed.", ". Mude-o l\u00E1 primeiro, se necess\u00E1rio."),
+        if (length(llm_cx())) L(" It also asks for the values of the complex-design features ticked in the sidebar.",
+                                " Ele tamb\u00E9m pede os valores das caracter\u00EDsticas de desenho complexo marcadas na barra lateral."))
   }))
 
   # Current app inputs, renamed to the JSON field names used in the prompt.
+  llm_cx <- function() if (isTRUE(input$cx_on)) input$cx_features %||% character(0) else character(0)
   current_for_llm <- function() {
-    r <- raw_inputs()
-    keys <- llm_keys_for(input$otype, input$measure)
+    keys <- llm_keys_for(input$otype, input$measure, llm_cx())
+    r <- c(raw_inputs(), lapply(setNames(grep("^cx_", keys, value = TRUE), grep("^cx_", keys, value = TRUE)),
+                                function(id) input[[id]]))
     v <- r[intersect(keys, names(r))]
     if ("dropout_percent" %in% keys) v$dropout_percent <- r$dropout
     v[vapply(v, function(x) length(x) == 1 && !is.na(x), logical(1))]
@@ -931,7 +1000,7 @@ server <- function(input, output, session) {
       known = input$pg_known, constraints = input$pg_constraints,
       web = input$pg_web, language = input$pg_language)
     build_llm_prompt(info, if (isTRUE(input$pg_current)) current_for_llm(),
-                     otype = input$otype, measure = input$measure)
+                     otype = input$otype, measure = input$measure, cx = llm_cx())
   }) |> debounce(400)
 
   output$pg_prompt <- renderText(llm_prompt())

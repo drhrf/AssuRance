@@ -274,8 +274,8 @@ footer { padding: 40px 0 60px; color: var(--muted); font-size: .9rem; border-top
 <section id="concepts">
   <div class="wrap">
     <div class="eyebrow"><span lang="en">Key concepts</span><span lang="pt">Conceitos-chave</span></div>
-    <h2 lang="en">Seven ideas that make everything else easy</h2>
-    <h2 lang="pt">Sete ideias que tornam todo o resto fácil</h2>
+    <h2 lang="en">Eight ideas that make everything else easy</h2>
+    <h2 lang="pt">Oito ideias que tornam todo o resto fácil</h2>
 
     <h3 lang="en">1. Assurance is power, averaged over your uncertainty</h3>
     <h3 lang="pt">1. <em>Assurance</em> é o poder, em média, sobre a sua incerteza</h3>
@@ -347,6 +347,14 @@ footer { padding: 40px 0 60px; color: var(--muted); font-size: .9rem; border-top
     <div class="formula">Assurance = <span lang="en">detection if real</span><span lang="pt">detecção se real</span> × P(<span lang="en">effect real</span><span lang="pt">efeito real</span>) + P(<span lang="en">success without a real effect</span><span lang="pt">sucesso sem efeito real</span>)</div>
     <p lang="en">The app adds two <strong>Shannon information</strong> measures, in bits. <em>Outcome entropy</em> tells you how predictable the trial's result is (1 bit is a coin flip). <em>Mutual information</em> tells you how much the result will teach you about whether the effect is real, and about its size. Read entropy next to the detection rate: it is low both when success is almost certain and when failure is almost certain.</p>
     <p lang="pt">O aplicativo acrescenta duas medidas de <strong>informação de Shannon</strong>, em bits. A <em>entropia do resultado</em> diz o quão previsível é o resultado do ensaio (1 bit é cara ou coroa). A <em>informação mútua</em> diz o quanto o resultado vai ensinar sobre o efeito ser real, e sobre o seu tamanho. Leia a entropia junto da taxa de detecção: ela é baixa tanto quando o sucesso é quase certo quanto quando o fracasso é quase certo.</p>
+
+    <h3 lang="en">8. Complex designs: how much bigger, roughly?</h3>
+    <h3 lang="pt">8. Desenhos complexos: quanto maior, mais ou menos?</h3>
+    <p lang="en">Real protocols often add complications to the simple two-arm trial: randomising clinics instead of people, several treatment arms, interim analyses, co-primary endpoints, people who don't take the treatment. Each one changes the sample size in a known, textbook way. The app's <strong>Complex design</strong> panel lets you tick them, and a card on the Results tab shows a <strong>rough extrapolation</strong> from your simple design, together with a stricter target (for example 90%) or a stricter α.</p>
+    <p lang="pt">Protocolos reais costumam acrescentar complicações ao ensaio simples de dois braços: randomizar clínicas em vez de pessoas, vários braços de tratamento, análises interinas, desfechos coprimários, pessoas que não tomam o tratamento. Cada uma muda o tamanho amostral de um jeito conhecido e clássico. O painel <strong>Desenho complexo</strong> do aplicativo permite marcá-las, e um cartão na aba Resultados mostra uma <strong>extrapolação grosseira</strong> a partir do seu desenho simples, junto com uma meta mais exigente (por exemplo 90%) ou um α mais rígido.</p>
+    <div class="formula">n<sub><span lang="en">complex</span><span lang="pt">complexo</span></sub> ≈ n<sub><span lang="en">simple, stricter rule</span><span lang="pt">simples, regra mais rígida</span></sub> × <span lang="en">cluster</span><span lang="pt">clusters</span> × <span lang="en">repeated measures</span><span lang="pt">medidas repetidas</span> × crossover × <span lang="en">interim analyses</span><span lang="pt">análises interinas</span></div>
+    <p lang="en">Stricter targets, split α (several arms or endpoints) and diluted effects (non-adherence) are recalculated exactly; design effects multiply the result. For example, clusters of 20 with an ICC of 0.05 almost double the sample size (design effect 1.95). A waterfall chart shows which factor costs the most. Treat the result as a planning estimate and confirm the final number with dedicated software.</p>
+    <p lang="pt">Metas mais exigentes, α dividido (vários braços ou desfechos) e efeitos diluídos (não adesão) são recalculados exatamente; os efeitos de desenho multiplicam o resultado. Por exemplo, clusters de 20 pessoas com ICC de 0,05 quase dobram o tamanho amostral (efeito de desenho 1,95). Um gráfico em cascata mostra qual fator custa mais. Trate o resultado como uma estimativa de planejamento e confirme o número final com software específico.</p>
   </div>
 </section>
 
@@ -369,6 +377,8 @@ footer { padding: 40px 0 60px; color: var(--muted); font-size: .9rem; border-top
         <li lang="pt"><strong>Desenho do ensaio.</strong> A faixa de tamanhos amostrais a avaliar (por grupo), a razão de alocação (ex.: 2:1) e o abandono esperado (usado para calcular quantos recrutar).</li>
         <li lang="en"><strong>What counts as success.</strong> Two-sided or one-sided, the success threshold, α, and your target probability (commonly 80% or 90%).</li>
         <li lang="pt"><strong>O que conta como sucesso.</strong> Bilateral ou unilateral, o limiar de sucesso, α e sua probabilidade-alvo (geralmente 80% ou 90%).</li>
+        <li lang="en"><strong>Complex design (optional).</strong> Tick the complications your real trial has (clusters, repeated measures, crossover, several arms, several endpoints, interim analyses, non-adherence) and a stricter target or α. A card on the Results tab extrapolates the sample size. See <a href="#concepts">idea 8</a>.</li>
+        <li lang="pt"><strong>Desenho complexo (opcional).</strong> Marque as complicações que o seu ensaio real tem (clusters, medidas repetidas, crossover, vários braços, vários desfechos, análises interinas, não adesão) e uma meta ou α mais exigente. Um cartão na aba Resultados extrapola o tamanho amostral. Veja a <a href="#concepts">ideia 8</a>.</li>
         <li lang="en"><strong>Computation.</strong> Simulation (default) or exact; number of simulated trials; random seed. The sidebar estimates the run time.</li>
         <li lang="pt"><strong>Cálculo.</strong> Simulação (padrão) ou exato; número de ensaios simulados; semente aleatória. A barra lateral estima o tempo de execução.</li>
         <li lang="en"><strong>Calculate.</strong> A progress box appears with a <strong>Stop run</strong> button, and you can keep using the other tabs meanwhile. If you change inputs afterwards, a yellow note reminds you to recalculate. The <strong>bookmark</strong> button gives you a link that restores all your inputs.</li>
@@ -399,6 +409,25 @@ footer { padding: 40px 0 60px; color: var(--muted); font-size: .9rem; border-top
           </ul>
         </div>
         <figure><img class="shot" src="img/results-summary.png" alt="Summary and results table" loading="lazy"></figure>
+      </div>
+
+      <div class="tour-item" id="tour-complex">
+        <div>
+          <h4><span class="tag">Results</span> <span lang="en">The complex-design card</span><span lang="pt">O cartão de desenho complexo</span></h4>
+          <ul>
+            <li lang="en"><strong>A headline:</strong> the simple design's n next to the extrapolated n, the total to enrol across all arms, the number of clusters and, for survival outcomes, the expected events.</li>
+            <li lang="pt"><strong>Uma frase-resumo:</strong> o n do desenho simples ao lado do n extrapolado, o total a recrutar em todos os braços, o número de clusters e, para desfechos de sobrevida, os eventos esperados.</li>
+            <li lang="en"><strong>A table</strong> for all three criteria: frequentist power, Bayesian assurance and detection if real.</li>
+            <li lang="pt"><strong>Uma tabela</strong> para os três critérios: poder frequentista, <em>assurance</em> bayesiana e detecção se real.</li>
+            <li lang="en"><strong>A waterfall chart</strong> showing how each adjustment multiplies the sample size, with the formula and reference behind each one.</li>
+            <li lang="pt"><strong>Um gráfico em cascata</strong> mostrando como cada ajuste multiplica o tamanho amostral, com a fórmula e a referência de cada um.</li>
+            <li lang="en"><strong>Cautions</strong> for each adjustment, and the dedicated software to use for the final calculation.</li>
+            <li lang="pt"><strong>Cuidados</strong> para cada ajuste, e o software específico para o cálculo final.</li>
+          </ul>
+          <p class="small muted" lang="en">It updates instantly as you change the complex-design settings, using the last calculation's inputs. It is also included in the text report.</p>
+          <p class="small muted" lang="pt">Ele se atualiza na hora quando você muda as configurações do desenho complexo, usando as entradas do último cálculo. Também entra no relatório em texto.</p>
+        </div>
+        <figure><img class="shot" src="img/results-complex.png" alt="Complex design card" loading="lazy"></figure>
       </div>
 
       <div class="tour-item" id="tour-priors">
@@ -671,8 +700,8 @@ footer { padding: 40px 0 60px; color: var(--muted); font-size: .9rem; border-top
       <p lang="en">For continuous outcomes the cost grows with the square of the sample size. Use fewer sample sizes (a larger step), fewer simulated trials while exploring, or the exact engine. You can press <strong>Stop run</strong> at any time, and your previous results are kept.</p>
       <p lang="pt">Para desfechos contínuos, o custo cresce com o quadrado do tamanho amostral. Use menos tamanhos amostrais (um passo maior), menos ensaios simulados durante a exploração, ou o cálculo exato. Você pode apertar <strong>Parar</strong> a qualquer momento, e os resultados anteriores são mantidos.</p></details>
     <details><summary><span lang="en">Can I use it for cluster, crossover or multi-arm trials?</span><span lang="pt">Posso usar para ensaios por conglomerados, cruzados ou com múltiplos braços?</span></summary>
-      <p lang="en">Not directly. The app covers two-arm, individually randomised, parallel-group trials. For a cluster trial, you can roughly inflate the sample size by the design effect 1 + (m − 1)·ICC, but a dedicated tool is better.</p>
-      <p lang="pt">Não diretamente. O aplicativo cobre ensaios de dois braços, com randomização individual e grupos paralelos. Para um ensaio por conglomerados, dá para inflar grosseiramente o tamanho amostral pelo efeito de desenho 1 + (m − 1)·ICC, mas uma ferramenta dedicada é melhor.</p></details>
+      <p lang="en">Roughly. The calculations are for two-arm, individually randomised, parallel-group trials, but the <strong>Complex design</strong> panel extrapolates them to cluster, crossover, repeated-measures, multi-arm, multi-endpoint and group sequential designs, and to non-adherence (see <a href="#concepts">idea 8</a>). Use it to see roughly how much bigger the trial must be, then confirm with a dedicated tool (e.g. clusterPower, rpact, gsDesign) or a simulation of the full design.</p>
+      <p lang="pt">Aproximadamente. Os cálculos são para ensaios de dois braços, com randomização individual e grupos paralelos, mas o painel <strong>Desenho complexo</strong> os extrapola para desenhos por clusters, crossover, com medidas repetidas, vários braços, vários desfechos e sequenciais em grupos, e para a não adesão (veja a <a href="#concepts">ideia 8</a>). Use-o para ver mais ou menos quanto o ensaio precisa crescer e depois confirme com uma ferramenta específica (ex.: clusterPower, rpact, gsDesign) ou uma simulação do desenho completo.</p></details>
     <details><summary><span lang="en">Is my data stored anywhere?</span><span lang="pt">Meus dados ficam armazenados em algum lugar?</span></summary>
       <p lang="en">No. The app has no database and does not save your inputs. The bookmark link simply encodes your inputs in the URL. Saved scenarios live only in your browser session.</p>
       <p lang="pt">Não. O aplicativo não tem banco de dados e não salva suas entradas. O link de marcador apenas codifica suas entradas na URL. Os cenários salvos existem só na sua sessão do navegador.</p></details>
@@ -703,8 +732,10 @@ footer { padding: 40px 0 60px; color: var(--muted); font-size: .9rem; border-top
       <li lang="pt"><strong>Simulação:</strong> cada ensaio virtual sorteia seu próprio θ da priori de planejamento. Desfechos contínuos usam <code>bayesassurance::bayes_sim_unbalanced</code> (na sua parametrização, as variâncias da priori são relativas a σ²). Desfechos binários e de sobrevida simulam contagens binomiais ou dados de sobrevida por paciente.</li>
       <li lang="en"><strong>Power:</strong> t-test (two-sample or ANCOVA) for continuous outcomes, identical to <code>stats::power.t.test</code> for equal groups; Wald z-test on the working scale for binary and survival outcomes.</li>
       <li lang="pt"><strong>Poder:</strong> teste t (duas amostras ou ANCOVA) para desfechos contínuos, idêntico ao <code>stats::power.t.test</code> para grupos iguais; teste z de Wald na escala de trabalho para desfechos binários e de sobrevida.</li>
-      <li lang="en"><strong>Validation:</strong> 82 automated checks compare simulation with exact results across all outcome types, and power with standard formulas.</li>
-      <li lang="pt"><strong>Validação:</strong> 82 verificações automáticas comparam a simulação com os resultados exatos em todos os tipos de desfecho, e o poder com fórmulas padrão.</li>
+      <li lang="en"><strong>Complex designs:</strong> recalculation for a stricter target or α, α split over arms or endpoints, and effect dilution by non-adherence; then design effects for clusters (Eldridge et al., 2006), repeated measures (Frison &amp; Pocock, 1992), 2x2 crossover (Senn, 2002) and the group sequential inflation factor (Jennison &amp; Turnbull, 2000).</li>
+      <li lang="pt"><strong>Desenhos complexos:</strong> recálculo para meta ou α mais exigentes, α dividido entre braços ou desfechos e diluição do efeito pela não adesão; depois, efeitos de desenho para clusters (Eldridge et al., 2006), medidas repetidas (Frison &amp; Pocock, 1992), crossover 2x2 (Senn, 2002) e o fator de inflação sequencial em grupos (Jennison &amp; Turnbull, 2000).</li>
+      <li lang="en"><strong>Validation:</strong> 161 automated checks compare simulation with exact results across all outcome types, power with standard formulas, and the complex-design extrapolations with simulated cluster, crossover and non-adherence trials.</li>
+      <li lang="pt"><strong>Validação:</strong> 161 verificações automáticas comparam a simulação com os resultados exatos em todos os tipos de desfecho, o poder com fórmulas padrão e as extrapolações de desenho complexo com ensaios simulados por clusters, crossover e com não adesão.</li>
       <li lang="en"><strong>Limitations:</strong> nuisance parameters (SD, correlation, control event rate, control median) are treated as known; survival assumes exponential times and proportional hazards; normal approximations are rough with very few events.</li>
       <li lang="pt"><strong>Limitações:</strong> parâmetros de incômodo (DP, correlação, taxa de eventos no controle, mediana no controle) são tratados como conhecidos; a sobrevida supõe tempos exponenciais e riscos proporcionais; aproximações normais são grosseiras com pouquíssimos eventos.</li>
     </ul>
